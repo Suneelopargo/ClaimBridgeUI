@@ -13,7 +13,9 @@ import {
   YAxis,
 } from 'recharts'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import Footer from './components/Footer'
 import LoadingOverlay from './components/LoadingOverlay'
+import ReconciliationRecordsPage from './components/ReconciliationRecordsPage'
 import './App.css'
 
 const ADMIN_CREDENTIALS = {
@@ -32,6 +34,7 @@ const REFRESH_OPTIONS = [0, 30, 60, 300]
 const WORKSPACE_TABS = [
   { id: 'dashboard', label: 'Claims Dashboard' },
   { id: 'ihx-sync', label: 'IHX Ingestion' },
+  { id: 'reconciliation', label: 'Reconciliation Grid' },
 ]
 
 const formatCurrency = (value) =>
@@ -434,8 +437,15 @@ function DashboardPage({ onLogout, isActive = true }) {
           >
             API Docs
           </a>
-          <button type="button" className="primary-button" onClick={onLogout}>
-            Logout
+          <button type="button" className="primary-button sidebar-logout" onClick={onLogout}>
+            <span className="logout-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M15 3h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2" />
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+              </svg>
+            </span>
+            <span>Logout</span>
           </button>
         </div>
       </aside>
@@ -851,8 +861,19 @@ function WorkspacePage({ onLogout }) {
             })}
           </div>
 
-          <button type="button" className="secondary-button workspace-logout" onClick={onLogout}>
-            Logout
+          <button
+            type="button"
+            className="secondary-button workspace-logout workspace-logout--enhanced"
+            onClick={onLogout}
+          >
+            <span className="logout-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M15 3h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2" />
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+              </svg>
+            </span>
+            <span>Logout</span>
           </button>
         </div>
       </header>
@@ -863,6 +884,10 @@ function WorkspacePage({ onLogout }) {
 
       <section className={`workspace-view ${activeTab === 'ihx-sync' ? 'workspace-view--active' : ''}`}>
         <IhxSyncPage />
+      </section>
+
+      <section className={`workspace-view ${activeTab === 'reconciliation' ? 'workspace-view--active' : ''}`}>
+        <ReconciliationRecordsPage isActive={activeTab === 'reconciliation'} />
       </section>
     </div>
   )
@@ -882,24 +907,30 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={<LoginPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />}
-      />
-      <Route
-        path="/dashboard"
-        element={(
-          <ProtectedRoute isAuthenticated={isAuthenticated}>
-            <WorkspacePage onLogout={handleLogout} />
-          </ProtectedRoute>
-        )}
-      />
-      <Route
-        path="*"
-        element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />}
-      />
-    </Routes>
+    <div className="app-layout">
+      <div className="app-layout__content">
+        <Routes>
+          <Route
+            path="/login"
+            element={<LoginPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />}
+          />
+          <Route
+            path="/dashboard"
+            element={(
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <WorkspacePage onLogout={handleLogout} />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="*"
+            element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />}
+          />
+        </Routes>
+      </div>
+
+      <Footer />
+    </div>
   )
 }
 
