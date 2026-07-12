@@ -1,12 +1,21 @@
 .common-loader {
+  display: grid;
+  place-items: center;
+  background: rgba(241, 245, 249, 0.88);
+  backdrop-filter: blur(2px);
+}
+
+.common-loader--viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.common-loader--container {
   position: absolute;
   inset: 0;
   z-index: 4;
-  display: grid;
-  place-items: center;
   border-radius: var(--radius-xl);
-  background: rgba(241, 245, 249, 0.88);
-  backdrop-filter: blur(2px);
 }
 
 .common-loader__content {

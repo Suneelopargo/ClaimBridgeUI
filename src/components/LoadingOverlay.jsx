@@ -4,13 +4,17 @@ export default function LoadingOverlay({
   isVisible,
   title = 'Please wait',
   description = 'Loading data from server. This may take a moment.',
+  scope = 'viewport',
   className = '',
 }) {
   if (!isVisible) {
     return null
   }
 
-  const rootClassName = className ? `common-loader ${className}` : 'common-loader'
+  const scopeClassName = scope === 'container' ? 'common-loader--container' : 'common-loader--viewport'
+  const rootClassName = className
+    ? `common-loader ${scopeClassName} ${className}`
+    : `common-loader ${scopeClassName}`
 
   return (
     <section className={rootClassName} aria-live="polite" aria-busy="true" role="status">

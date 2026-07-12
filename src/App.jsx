@@ -366,11 +366,7 @@ function DashboardPage({ onLogout, isActive = true }) {
 
   return (
     <main className="dashboard-shell dashboard-layout">
-      <LoadingOverlay
-        isVisible={loading}
-        title="Loading Claims Dashboard"
-        description="Please wait while ClaimBridge retrieves the latest claim status metrics and summary insights."
-      />
+      <LoadingOverlay isVisible={loading} />
 
       <aside
         className={`sidebar panel ${isSidebarOpen ? 'sidebar--open' : ''}`}
@@ -732,11 +728,7 @@ function IhxSyncPage() {
 
   return (
     <main className="dashboard-shell ihx-sync-shell">
-      <LoadingOverlay
-        isVisible={isSyncing}
-        title="IHX ingestion is running"
-        description="Please wait. Loader will stay active until the backend finishes processing all pages and returns the final response."
-      />
+      <LoadingOverlay isVisible={isSyncing} />
 
       <section className="panel ihx-sync-panel">
         <div className="panel-heading">
