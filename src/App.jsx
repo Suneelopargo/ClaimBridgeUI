@@ -792,12 +792,7 @@ function IhxSyncPage() {
         {syncError ? <p className="form-error">{syncError}</p> : null}
 
         <div className="ihx-sync-meta">
-          <p>
-            <strong>Request:</strong> POST {syncPath}
-          </p>
-          <p>
-            <strong>Backend target:</strong> http://127.0.0.1:8001 (via Vite proxy)
-          </p>
+        
           <p>
             <strong>Last run:</strong> {runLabel}
           </p>
