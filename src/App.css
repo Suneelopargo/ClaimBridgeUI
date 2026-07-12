@@ -7,6 +7,78 @@
   margin: 0 auto;
 }
 
+.workspace-shell {
+  padding: 20px 20px 28px;
+}
+
+.workspace-header {
+  width: min(1480px, 100%);
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.workspace-header h2 {
+  margin: 10px 0 6px;
+  color: var(--heading-color);
+  font-size: clamp(1.3rem, 2vw, 1.85rem);
+}
+
+.workspace-header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.workspace-actions {
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+}
+
+.workspace-tabs {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.55);
+}
+
+.workspace-tab {
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.workspace-tab--active {
+  color: #fff;
+  background: linear-gradient(135deg, #0c7db5, #0e7490);
+  box-shadow: 0 10px 20px rgba(12, 125, 181, 0.24);
+}
+
+.workspace-tab:hover {
+  transform: translateY(-1px);
+}
+
+.workspace-logout {
+  width: 100%;
+}
+
+.workspace-view {
+  display: none;
+}
+
+.workspace-view--active {
+  display: block;
+}
+
 .auth-shell {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
@@ -604,6 +676,113 @@
   font-weight: 600;
 }
 
+.ihx-sync-shell {
+  display: grid;
+  gap: 18px;
+  min-height: auto;
+  padding-top: 0;
+  position: relative;
+}
+
+.ihx-sync-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ihx-sync-context article {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.ihx-sync-context h3 {
+  margin: 0 0 6px;
+  color: var(--heading-color);
+  font-size: 1rem;
+}
+
+.ihx-sync-context p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.ihx-sync-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.ihx-sync-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.ihx-sync-form span {
+  color: var(--heading-color);
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.ihx-sync-form input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(248, 250, 252, 0.92);
+  font: inherit;
+  color: var(--heading-color);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.ihx-sync-form input:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14);
+  background: #fff;
+}
+
+.ihx-sync-form .primary-button {
+  grid-column: span 2;
+}
+
+.ihx-sync-form .primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.ihx-sync-meta {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.ihx-sync-meta p {
+  margin: 0;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.ihx-sync-meta strong {
+  color: var(--heading-color);
+}
+
+.ihx-sync-result pre {
+  margin: 0;
+  max-height: 440px;
+  overflow: auto;
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(248, 250, 252, 0.92);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 1200px) {
   .dashboard-layout,
   .chart-grid,
@@ -638,6 +817,15 @@
     max-height: none;
     overflow: visible;
   }
+
+  .workspace-header {
+    flex-direction: column;
+  }
+
+  .workspace-actions {
+    width: 100%;
+    justify-items: start;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -654,6 +842,19 @@
   .auth-shell,
   .dashboard-shell {
     padding: 24px;
+  }
+
+  .workspace-shell {
+    padding: 16px;
+  }
+
+  .workspace-tabs {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .workspace-tab {
+    flex: 1;
   }
 
   .stats-grid,
@@ -704,6 +905,10 @@
   .auth-shell,
   .dashboard-shell {
     padding: 18px;
+  }
+
+  .workspace-shell {
+    padding: 12px;
   }
 
   .auth-panel,
@@ -778,5 +983,17 @@
 
   .status-distribution-legend__metrics {
     grid-column: 2;
+  }
+
+  .ihx-sync-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ihx-sync-context {
+    grid-template-columns: 1fr;
+  }
+
+  .ihx-sync-form .primary-button {
+    grid-column: auto;
   }
 }

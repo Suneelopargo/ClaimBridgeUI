@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import LoadingOverlay from './components/LoadingOverlay'
 import './App.css'
 
 const ADMIN_CREDENTIALS = {
@@ -21,11 +22,17 @@ const ADMIN_CREDENTIALS = {
 }
 
 const AUTH_STORAGE_KEY = 'claimbridge-admin-auth'
+const IHX_SYNC_ENDPOINT = '/api/ihx/sync'
 
 const STATUS_COLORS = ['#1d4ed8', '#d97706', '#059669', '#dc2626', '#7c3aed', '#db2777', '#0f766e', '#334155']
 const CLAIMED_BAR_COLOR = '#2563eb'
 const APPROVED_BAR_COLOR = '#ea580c'
 const REFRESH_OPTIONS = [0, 30, 60, 300]
+
+const WORKSPACE_TABS = [
+  { id: 'dashboard', label: 'Claims Dashboard' },
+  { id: 'ihx-sync', label: 'IHX Ingestion' },
+]
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -195,7 +202,7 @@ function LoginPage({ isAuthenticated, onLogin }) {
   )
 }
 
-function DashboardPage({ onLogout }) {
+function DashboardPage({ onLogout, isActive = true }) {
   const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -254,6 +261,10 @@ function DashboardPage({ onLogout }) {
   }
 
   useEffect(() => {
+    if (!isActive) {
+      return undefined
+    }
+
     let active = true
 
     const loadDashboard = async (showLoader = true) => {
@@ -314,7 +325,7 @@ function DashboardPage({ onLogout }) {
     return () => {
       active = false
     }
-  }, [refreshInterval])
+  }, [refreshInterval, isActive])
 
   const statusData = useMemo(() => dashboardData?.statuses ?? [], [dashboardData])
 
@@ -355,6 +366,12 @@ function DashboardPage({ onLogout }) {
 
   return (
     <main className="dashboard-shell dashboard-layout">
+      <LoadingOverlay
+        isVisible={loading}
+        title="Loading Claims Dashboard"
+        description="Please wait while ClaimBridge retrieves the latest claim status metrics and summary insights."
+      />
+
       <aside
         className={`sidebar panel ${isSidebarOpen ? 'sidebar--open' : ''}`}
         id="dashboard-control-panel"
@@ -453,8 +470,6 @@ function DashboardPage({ onLogout }) {
             <span className="status-pill status-pill--soft">Last sync: {lastUpdatedLabel}</span>
           </div>
         </header>
-
-        {loading ? <section className="panel panel--loading">Loading dashboard data...</section> : null}
 
         {error ? (
           <section className="panel panel--error">
@@ -647,6 +662,225 @@ function DashboardPage({ onLogout }) {
   )
 }
 
+function IhxSyncPage() {
+  const [startPage, setStartPage] = useState('1')
+  const [maxPages, setMaxPages] = useState('130')
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
+  const [syncResult, setSyncResult] = useState(null)
+  const [lastRunAt, setLastRunAt] = useState(null)
+
+  const runLabel = lastRunAt
+    ? new Intl.DateTimeFormat('en-IN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(lastRunAt)
+    : 'Not run yet'
+
+  const syncPath = useMemo(() => {
+    const query = new URLSearchParams({
+      start_page: startPage || '1',
+      max_pages: maxPages || '1',
+    })
+
+    return `${IHX_SYNC_ENDPOINT}?${query.toString()}`
+  }, [startPage, maxPages])
+
+  const handleSyncSubmit = async (event) => {
+    event.preventDefault()
+
+    const parsedStartPage = Number(startPage)
+    const parsedMaxPages = Number(maxPages)
+
+    if (!Number.isInteger(parsedStartPage) || parsedStartPage < 1) {
+      setSyncError('Start page must be a positive whole number.')
+      return
+    }
+
+    if (!Number.isInteger(parsedMaxPages) || parsedMaxPages < 1) {
+      setSyncError('Max pages must be a positive whole number.')
+      return
+    }
+
+    setIsSyncing(true)
+    setSyncError('')
+
+    try {
+      const response = await fetch(syncPath, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Sync request failed with status ${response.status}`)
+      }
+
+      const responseText = await response.text()
+      const payload = responseText ? JSON.parse(responseText) : {}
+      setSyncResult(payload)
+      setLastRunAt(new Date())
+    } catch (requestError) {
+      setSyncError(
+        requestError instanceof Error ? requestError.message : 'Unable to run IHX sync.',
+      )
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  return (
+    <main className="dashboard-shell ihx-sync-shell">
+      <LoadingOverlay
+        isVisible={isSyncing}
+        title="IHX ingestion is running"
+        description="Please wait. Loader will stay active until the backend finishes processing all pages and returns the final response."
+      />
+
+      <section className="panel ihx-sync-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">IHX Connector</span>
+            <h2>IHX Claims Ingestion Control</h2>
+            <p>
+              Run staged IHX pulls into ClaimBridge and continue work in other tabs without losing
+              request context or API output.
+            </p>
+          </div>
+        </div>
+
+        <div className="ihx-sync-context">
+          <article>
+            <h3>Why this screen</h3>
+            <p>
+              Use this for controlled backfill and re-sync operations when claims are delayed,
+              corrected, or newly available from IHX.
+            </p>
+          </article>
+          <article>
+            <h3>How it runs</h3>
+            <p>
+              Sends a POST request to the backend sync API with page-range query params and shows
+              the latest response payload for review.
+            </p>
+          </article>
+        </div>
+
+        <form className="ihx-sync-form" onSubmit={handleSyncSubmit}>
+          <label>
+            <span>Start page (from IHX)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={startPage}
+              onChange={(event) => setStartPage(event.target.value)}
+              placeholder="1"
+            />
+          </label>
+
+          <label>
+            <span>Max pages to ingest</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={maxPages}
+              onChange={(event) => setMaxPages(event.target.value)}
+              placeholder="130"
+            />
+          </label>
+
+          <button type="submit" className="primary-button" disabled={isSyncing}>
+            {isSyncing ? 'Ingestion in progress...' : 'Start IHX Ingestion'}
+          </button>
+        </form>
+
+        {syncError ? <p className="form-error">{syncError}</p> : null}
+
+        <div className="ihx-sync-meta">
+          <p>
+            <strong>Request:</strong> POST {syncPath}
+          </p>
+          <p>
+            <strong>Backend target:</strong> http://127.0.0.1:8001 (via Vite proxy)
+          </p>
+          <p>
+            <strong>Last run:</strong> {runLabel}
+          </p>
+        </div>
+      </section>
+
+      <section className="panel ihx-sync-result">
+        <div className="panel-heading">
+          <div>
+            <h2>Ingestion response log</h2>
+            <p>Latest backend response for IHX ingestion verification and troubleshooting.</p>
+          </div>
+        </div>
+
+        {syncResult ? (
+          <pre>{JSON.stringify(syncResult, null, 2)}</pre>
+        ) : (
+          <p>No sync result yet. Run sync to view response data here.</p>
+        )}
+      </section>
+    </main>
+  )
+}
+
+function WorkspacePage({ onLogout }) {
+  const [activeTab, setActiveTab] = useState('dashboard')
+
+  return (
+    <div className="workspace-shell">
+      <header className="workspace-header panel">
+        <div>
+          <span className="eyebrow">ClaimBridge Workspace</span>
+          <h2>Claims Operations Workspace</h2>
+          <p>
+            Monitor claim outcomes and run IHX ingestion from one place with persistent tab state.
+          </p>
+        </div>
+
+        <div className="workspace-actions">
+          <div className="workspace-tabs" role="tablist" aria-label="ClaimBridge workspace tabs">
+            {WORKSPACE_TABS.map((tab) => {
+              const isSelected = activeTab === tab.id
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  className={`workspace-tab ${isSelected ? 'workspace-tab--active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+
+          <button type="button" className="secondary-button workspace-logout" onClick={onLogout}>
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <section className={`workspace-view ${activeTab === 'dashboard' ? 'workspace-view--active' : ''}`}>
+        <DashboardPage onLogout={onLogout} isActive={activeTab === 'dashboard'} />
+      </section>
+
+      <section className={`workspace-view ${activeTab === 'ihx-sync' ? 'workspace-view--active' : ''}`}>
+        <IhxSyncPage />
+      </section>
+    </div>
+  )
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(getStoredAuth)
 
@@ -670,7 +904,7 @@ function App() {
         path="/dashboard"
         element={(
           <ProtectedRoute isAuthenticated={isAuthenticated}>
-            <DashboardPage onLogout={handleLogout} />
+            <WorkspacePage onLogout={handleLogout} />
           </ProtectedRoute>
         )}
       />
