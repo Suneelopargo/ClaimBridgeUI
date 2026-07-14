@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
+import { API_BASE_URL, buildApiUrl } from '../config/api'
 import LoadingOverlay from './LoadingOverlay'
 import './ReconciliationRecordsPage.css'
 
-const RECONCILIATION_ENDPOINT = '/api/reconciliation/records'
-const RECONCILIATION_DOWNLOAD_ENDPOINT = '/api/reconciliation/download'
-const RECONCILIATION_IMPORT_ENDPOINT = '/api/reconciliation/import'
+const RECONCILIATION_ENDPOINT = buildApiUrl('/api/reconciliation/records')
+const RECONCILIATION_DOWNLOAD_ENDPOINT = buildApiUrl('/api/reconciliation/download')
+const RECONCILIATION_IMPORT_ENDPOINT = buildApiUrl('/api/reconciliation/import')
+const BACKEND_TARGET_LABEL = API_BASE_URL || 'the current host /api path'
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 const GRID_COLUMNS = [
@@ -631,7 +633,7 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
           <section className="panel panel--error reconciliation-error">
             <h3>Unable to load records</h3>
             <p>{error}</p>
-            <p>Make sure backend is running at http://127.0.0.1:8001.</p>
+            <p>Make sure backend is reachable at {BACKEND_TARGET_LABEL}.</p>
           </section>
         ) : null}
 

@@ -13,18 +13,18 @@ import {
   YAxis,
 } from 'recharts'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { API_BASE_URL, buildApiUrl } from './config/api'
 import Footer from './components/Footer'
 import LoadingOverlay from './components/LoadingOverlay'
 import ReconciliationRecordsPage from './components/ReconciliationRecordsPage'
+import { authenticateLogin } from './services/authApi'
 import './App.css'
 
-const ADMIN_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin',
-}
-
 const AUTH_STORAGE_KEY = 'claimbridge-admin-auth'
-const IHX_SYNC_ENDPOINT = '/api/ihx/sync'
+const IHX_SYNC_ENDPOINT = buildApiUrl('/api/ihx/sync')
+const DASHBOARD_SUMMARY_ENDPOINT = buildApiUrl('/api/dashboard/claim-status-summary')
+const API_DOCS_URL = buildApiUrl('/docs')
+const BACKEND_TARGET_LABEL = API_BASE_URL || 'the current host /api path'
 
 const STATUS_COLORS = ['#1d4ed8', '#d97706', '#059669', '#dc2626', '#7c3aed', '#db2777', '#0f766e', '#334155']
 const CLAIMED_BAR_COLOR = '#2563eb'
@@ -97,6 +97,7 @@ function LoginPage({ isAuthenticated, onLogin }) {
   const location = useLocation()
   const [formData, setFormData] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -113,20 +114,30 @@ function LoginPage({ isAuthenticated, onLogin }) {
     setError('')
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
+    setError('')
+    setIsSubmitting(true)
 
-    if (
-      formData.username === ADMIN_CREDENTIALS.username &&
-      formData.password === ADMIN_CREDENTIALS.password
-    ) {
+    try {
+      const payload = await authenticateLogin(formData)
+
+      if (!payload?.success) {
+        throw new Error('Invalid credentials.')
+      }
+
       onLogin()
       const redirectPath = location.state?.from?.pathname || '/dashboard'
       navigate(redirectPath, { replace: true })
-      return
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to authenticate login details.',
+      )
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setError('Invalid credentials. Use admin / admin to sign in.')
   }
 
   return (
@@ -190,14 +201,14 @@ function LoginPage({ isAuthenticated, onLogin }) {
 
             {error ? <p className="form-error">{error}</p> : null}
 
-            <button type="submit" className="primary-button">
-              Sign In
+            <button type="submit" className="primary-button" disabled={isSubmitting}>
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
           <div className="auth-hint">
-            <span>Demo credentials</span>
-            <strong>admin / admin</strong>
+            <span>Backend authentication</span>
+            <strong>Use a username and password from the users table</strong>
           </div>
         </div>
       </section>
@@ -242,7 +253,7 @@ function DashboardPage({ onLogout, isActive = true }) {
     setError('')
 
     try {
-      const response = await fetch('/api/dashboard/claim-status-summary')
+      const response = await fetch(DASHBOARD_SUMMARY_ENDPOINT)
 
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`)
@@ -281,7 +292,7 @@ function DashboardPage({ onLogout, isActive = true }) {
       setError('')
 
       try {
-        const response = await fetch('/api/dashboard/claim-status-summary')
+        const response = await fetch(DASHBOARD_SUMMARY_ENDPOINT)
 
         if (!response.ok) {
           throw new Error(`Request failed with status ${response.status}`)
@@ -431,7 +442,7 @@ function DashboardPage({ onLogout, isActive = true }) {
         <div className="sidebar-actions">
           <a
             className="secondary-button"
-            href="http://127.0.0.1:8001/docs"
+            href={API_DOCS_URL}
             target="_blank"
             rel="noreferrer"
           >
@@ -481,7 +492,7 @@ function DashboardPage({ onLogout, isActive = true }) {
           <section className="panel panel--error">
             <h2>Dashboard unavailable</h2>
             <p>{error}</p>
-            <p>Make sure the FastAPI backend is running on http://127.0.0.1:8001.</p>
+            <p>Make sure the FastAPI backend is reachable at {BACKEND_TARGET_LABEL}.</p>
           </section>
         ) : null}
 
@@ -648,7 +659,7 @@ function DashboardPage({ onLogout, isActive = true }) {
                 </div>
                 <div>
                   <dt>Auth mode</dt>
-                  <dd>Frontend demo login with protected routes</dd>
+                  <dd>Backend login API with protected routes</dd>
                 </div>
                 <div>
                   <dt>Refresh model</dt>
