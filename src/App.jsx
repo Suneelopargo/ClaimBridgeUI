@@ -205,11 +205,6 @@ function LoginPage({ isAuthenticated, onLogin }) {
               {isSubmitting ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-
-          <div className="auth-hint">
-            <span>Backend authentication</span>
-            <strong>Use a username and password from the users table</strong>
-          </div>
         </div>
       </section>
     </main>
