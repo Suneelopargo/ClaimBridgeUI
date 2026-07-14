@@ -122,6 +122,7 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [hospitalFilter, setHospitalFilter] = useState('all')
+  const [payorFilter, setPayorFilter] = useState('all')
   const [lastUpdated, setLastUpdated] = useState(null)
   const [sortConfig, setSortConfig] = useState({ key: 'updatedAt', direction: 'desc' })
   const [isSyncingPortal, setIsSyncingPortal] = useState(false)
@@ -151,7 +152,9 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
 
       const payload = await response.json()
       const nextRecords = Array.isArray(payload.items) ? payload.items : []
-      const nextTotal = Number(payload.total ?? payload.total_count ?? 0)
+      const nextTotal = Number(
+        payload.totalRecords ?? payload.total ?? payload.total_count ?? 0,
+      )
       const nextTotalPages =
         Number(payload.total_pages ?? payload.totalPages ?? 0) ||
         Math.max(1, Math.ceil((nextTotal || nextRecords.length) / pageSize))
@@ -218,6 +221,16 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
     )
   }, [records])
 
+  const payorCompanies = useMemo(() => {
+    const values = records
+      .map((record) => record.payorCompanyName)
+      .filter((value) => value !== null && value !== undefined && value !== '')
+
+    return Array.from(new Set(values)).sort((left, right) =>
+      String(left).localeCompare(String(right)),
+    )
+  }, [records])
+
   const filteredRecords = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
 
@@ -226,8 +239,10 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
         statusFilter === 'all' ? true : String(record.claimStatus || '') === statusFilter
       const matchesHospital =
         hospitalFilter === 'all' ? true : String(record.hospitalName || '') === hospitalFilter
+      const matchesPayor =
+        payorFilter === 'all' ? true : String(record.payorCompanyName || '') === payorFilter
 
-      if (!matchesStatus || !matchesHospital) {
+      if (!matchesStatus || !matchesHospital || !matchesPayor) {
         return false
       }
 
@@ -242,7 +257,7 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
           String(value).toLowerCase().includes(normalizedQuery)
       })
     })
-  }, [records, hospitalFilter, searchQuery, statusFilter])
+  }, [records, hospitalFilter, payorFilter, searchQuery, statusFilter])
 
   const sortedRecords = useMemo(() => {
     const { key, direction } = sortConfig
@@ -547,6 +562,19 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
               <option value="all">All hospitals</option>
               {hospitals.map((hospital) => (
                 <option key={hospital} value={hospital}>{hospital}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Payor Company</span>
+            <select
+              value={payorFilter}
+              onChange={(event) => setPayorFilter(event.target.value)}
+            >
+              <option value="all">All payor companies</option>
+              {payorCompanies.map((payor) => (
+                <option key={payor} value={payor}>{payor}</option>
               ))}
             </select>
           </label>
