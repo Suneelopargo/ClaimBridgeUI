@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -16,11 +16,17 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { API_BASE_URL, buildApiUrl } from './config/api'
 import Footer from './components/Footer'
 import LoadingOverlay from './components/LoadingOverlay'
+import ClaimValidationsPage from './components/ClaimValidationsPage'
 import ReconciliationRecordsPage from './components/ReconciliationRecordsPage'
 import { authenticateLogin } from './services/authApi'
 import './App.css'
 
 const AUTH_STORAGE_KEY = 'claimbridge-admin-auth'
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000
+const IDLE_WARNING_LEAD_MS = 2 * 60 * 1000
+const IDLE_WARNING_TIMEOUT_MS = IDLE_TIMEOUT_MS - IDLE_WARNING_LEAD_MS
+const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll']
+const IDLE_WARNING_LEAD_SECONDS = Math.floor(IDLE_WARNING_LEAD_MS / 1000)
 const IHX_SYNC_ENDPOINT = buildApiUrl('/api/ihx/sync')
 const DASHBOARD_SUMMARY_ENDPOINT = buildApiUrl('/api/dashboard/claim-status-summary')
 const API_DOCS_URL = buildApiUrl('/docs')
@@ -34,6 +40,7 @@ const REFRESH_OPTIONS = [0, 30, 60, 300]
 const WORKSPACE_TABS = [
   { id: 'dashboard', label: 'Claims Dashboard' },
   { id: 'ihx-sync', label: 'IHX Ingestion' },
+  { id: 'claim-validations', label: 'Claim Validations' },
   { id: 'reconciliation', label: 'Reconciliation Grid' },
 ]
 
@@ -80,6 +87,20 @@ const formatStatusTick = (value) => {
 
 function getStoredAuth() {
   return localStorage.getItem(AUTH_STORAGE_KEY) === 'true'
+}
+
+function clearClientStorage() {
+  try {
+    localStorage.clear()
+  } catch {
+    // Ignore storage failures in restricted contexts.
+  }
+
+  try {
+    sessionStorage.clear()
+  } catch {
+    // Ignore storage failures in restricted contexts.
+  }
 }
 
 function ProtectedRoute({ isAuthenticated, children }) {
@@ -182,7 +203,7 @@ function LoginPage({ isAuthenticated, onLogin }) {
                 type="text"
                 value={formData.username}
                 onChange={handleChange}
-                placeholder="admin"
+                placeholder="Username"
                 autoComplete="username"
               />
             </label>
@@ -194,7 +215,7 @@ function LoginPage({ isAuthenticated, onLogin }) {
                 type="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="admin"
+                placeholder="password"
                 autoComplete="current-password"
               />
             </label>
@@ -843,7 +864,8 @@ function WorkspacePage({ onLogout }) {
           <span className="eyebrow">ClaimBridge Workspace</span>
           <h2>Claims Operations Workspace</h2>
           <p>
-            Monitor claim outcomes and run IHX ingestion from one place with persistent tab state.
+            Monitor claim outcomes, run IHX ingestion, and validate claim packets from one place
+            with persistent tab state.
           </p>
         </div>
 
@@ -892,6 +914,10 @@ function WorkspacePage({ onLogout }) {
         <IhxSyncPage />
       </section>
 
+      <section className={`workspace-view ${activeTab === 'claim-validations' ? 'workspace-view--active' : ''}`}>
+        <ClaimValidationsPage />
+      </section>
+
       <section className={`workspace-view ${activeTab === 'reconciliation' ? 'workspace-view--active' : ''}`}>
         <ReconciliationRecordsPage isActive={activeTab === 'reconciliation'} />
       </section>
@@ -901,16 +927,128 @@ function WorkspacePage({ onLogout }) {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(getStoredAuth)
+  const [showIdleWarning, setShowIdleWarning] = useState(false)
+  const [idleCountdownSeconds, setIdleCountdownSeconds] = useState(IDLE_WARNING_LEAD_SECONDS)
+  const idleWarningRef = useRef(false)
+  const idleWarningTimeoutRef = useRef(null)
+  const idleLogoutTimeoutRef = useRef(null)
+  const idleCountdownIntervalRef = useRef(null)
+
+  const clearIdleTimeouts = useCallback(() => {
+    if (idleWarningTimeoutRef.current) {
+      window.clearTimeout(idleWarningTimeoutRef.current)
+      idleWarningTimeoutRef.current = null
+    }
+
+    if (idleLogoutTimeoutRef.current) {
+      window.clearTimeout(idleLogoutTimeoutRef.current)
+      idleLogoutTimeoutRef.current = null
+    }
+
+    if (idleCountdownIntervalRef.current) {
+      window.clearInterval(idleCountdownIntervalRef.current)
+      idleCountdownIntervalRef.current = null
+    }
+  }, [])
+
+  const executeLogout = useCallback(() => {
+    clearIdleTimeouts()
+    setShowIdleWarning(false)
+    clearClientStorage()
+    setIsAuthenticated(false)
+  }, [clearIdleTimeouts])
+
+  const scheduleIdleTimeouts = useCallback(() => {
+    clearIdleTimeouts()
+
+    idleWarningTimeoutRef.current = window.setTimeout(() => {
+      setIdleCountdownSeconds(IDLE_WARNING_LEAD_SECONDS)
+      setShowIdleWarning(true)
+    }, IDLE_WARNING_TIMEOUT_MS)
+
+    idleLogoutTimeoutRef.current = window.setTimeout(() => {
+      executeLogout()
+    }, IDLE_TIMEOUT_MS)
+  }, [clearIdleTimeouts, executeLogout])
+
+  const handleContinueSession = useCallback(() => {
+    setShowIdleWarning(false)
+    scheduleIdleTimeouts()
+  }, [scheduleIdleTimeouts])
+
+  useEffect(() => {
+    idleWarningRef.current = showIdleWarning
+  }, [showIdleWarning])
+
+  useEffect(() => {
+    if (!showIdleWarning) {
+      if (idleCountdownIntervalRef.current) {
+        window.clearInterval(idleCountdownIntervalRef.current)
+        idleCountdownIntervalRef.current = null
+      }
+
+      return undefined
+    }
+
+    idleCountdownIntervalRef.current = window.setInterval(() => {
+      setIdleCountdownSeconds((current) => (current > 0 ? current - 1 : 0))
+    }, 1000)
+
+    return () => {
+      if (idleCountdownIntervalRef.current) {
+        window.clearInterval(idleCountdownIntervalRef.current)
+        idleCountdownIntervalRef.current = null
+      }
+    }
+  }, [showIdleWarning])
+
+  const idleCountdownLabel = useMemo(() => {
+    const minutes = Math.floor(idleCountdownSeconds / 60)
+    const seconds = idleCountdownSeconds % 60
+    const paddedSeconds = String(seconds).padStart(2, '0')
+
+    return `${minutes}:${paddedSeconds}`
+  }, [idleCountdownSeconds])
 
   const handleLogin = () => {
     localStorage.setItem(AUTH_STORAGE_KEY, 'true')
+    setShowIdleWarning(false)
     setIsAuthenticated(true)
   }
 
   const handleLogout = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
-    setIsAuthenticated(false)
+    executeLogout()
   }
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      clearIdleTimeouts()
+
+      return undefined
+    }
+
+    const handleUserActivity = () => {
+      if (idleWarningRef.current) {
+        return
+      }
+
+      scheduleIdleTimeouts()
+    }
+
+    scheduleIdleTimeouts()
+
+    ACTIVITY_EVENTS.forEach((eventName) => {
+      window.addEventListener(eventName, handleUserActivity, { passive: true })
+    })
+
+    return () => {
+      ACTIVITY_EVENTS.forEach((eventName) => {
+        window.removeEventListener(eventName, handleUserActivity)
+      })
+
+      clearIdleTimeouts()
+    }
+  }, [clearIdleTimeouts, isAuthenticated, scheduleIdleTimeouts])
 
   return (
     <div className="app-layout">
@@ -934,6 +1072,29 @@ function App() {
           />
         </Routes>
       </div>
+
+      {isAuthenticated && showIdleWarning ? (
+        <section className="idle-warning-overlay" role="dialog" aria-modal="true" aria-labelledby="idle-warning-title">
+          <div className="idle-warning-card panel">
+            <span className="eyebrow">Session Timeout Alert</span>
+            <h3 id="idle-warning-title">Do you want to continue your session?</h3>
+            <p>
+              You have been inactive for {IDLE_TIMEOUT_MS - IDLE_WARNING_LEAD_MS} minutes. You will be logged out in 2 minutes if there
+              is no response.
+            </p>
+            <p><strong>Time remaining: {idleCountdownLabel}</strong></p>
+
+            <div className="idle-warning-actions">
+              <button type="button" className="primary-button" onClick={handleContinueSession}>
+                Continue Session
+              </button>
+              <button type="button" className="secondary-button" onClick={handleLogout}>
+                Logout Now
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <Footer />
     </div>

@@ -8,6 +8,47 @@
   flex: 1;
 }
 
+.idle-warning-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.idle-warning-card {
+  width: min(92vw, 500px);
+  display: grid;
+  gap: 14px;
+}
+
+.idle-warning-card h3 {
+  margin: 0;
+  color: var(--heading-color);
+  font-size: 1.35rem;
+}
+
+.idle-warning-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.idle-warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.idle-warning-actions .primary-button,
+.idle-warning-actions .secondary-button {
+  flex: 1;
+  min-width: 170px;
+}
+
 .auth-shell,
 .dashboard-shell {
   min-height: 100vh;
@@ -1090,6 +1131,10 @@
 
   .ihx-sync-form .primary-button {
     grid-column: auto;
+  }
+
+  .idle-warning-actions {
+    flex-direction: column;
   }
 }
 
