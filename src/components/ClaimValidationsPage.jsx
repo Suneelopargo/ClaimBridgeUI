@@ -399,18 +399,20 @@ export default function ClaimValidationsPage() {
               </button>
             </header>
 
-            <div className="ag-theme-quartz claim-review-grid">
-              <AgGridReact
-                rowData={reviewRequiredRows}
-                columnDefs={reviewRequiredColumnDefs}
-                defaultColDef={reviewRequiredDefaultColDef}
-                getRowId={(params) => params.data.id}
-                pagination
-                paginationPageSize={10}
-                paginationPageSizeSelector={[10, 20, 50]}
-                animateRows
-                domLayout="normal"
-              />
+            <div className="claimbridge-ag-grid-shell claim-review-grid-shell">
+              <div className="ag-theme-quartz claimbridge-ag-grid claim-review-grid">
+                <AgGridReact
+                  rowData={reviewRequiredRows}
+                  columnDefs={reviewRequiredColumnDefs}
+                  defaultColDef={reviewRequiredDefaultColDef}
+                  getRowId={(params) => params.data.id}
+                  pagination
+                  paginationPageSize={10}
+                  paginationPageSizeSelector={[10, 20, 50]}
+                  animateRows
+                  domLayout="normal"
+                />
+              </div>
             </div>
           </section>
         </div>

@@ -1,0 +1,104 @@
+.claimbridge-ag-grid-shell {
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.claimbridge-ag-grid {
+  --ag-font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --ag-font-size: 13px;
+  --ag-border-radius: 14px;
+  --ag-wrapper-border-radius: 14px;
+  --ag-borders: solid 1px;
+  --ag-border-color: rgba(148, 163, 184, 0.26);
+  --ag-background-color: rgba(255, 255, 255, 0.98);
+  --ag-foreground-color: #243854;
+  --ag-secondary-foreground-color: #526782;
+  --ag-header-background-color: #eef5fc;
+  --ag-header-foreground-color: #1d3553;
+  --ag-header-column-border: 1px solid rgba(157, 178, 203, 0.35);
+  --ag-header-column-resize-handle-color: #79a3cf;
+  --ag-row-border-color: rgba(226, 234, 245, 0.82);
+  --ag-row-hover-color: rgba(56, 189, 248, 0.12);
+  --ag-odd-row-background-color: rgba(246, 250, 255, 0.9);
+  --ag-selected-row-background-color: rgba(207, 232, 255, 0.72);
+  --ag-checkbox-checked-color: #0c7db5;
+  --ag-input-border-color: rgba(148, 163, 184, 0.4);
+  --ag-input-focus-border-color: #0284c7;
+  --ag-input-focus-box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.16);
+  --ag-icon-color: #345b82;
+  --ag-icon-font-weight: 700;
+  --ag-menu-shadow: 0 18px 34px rgba(14, 23, 41, 0.15);
+  --ag-card-shadow: 0 14px 28px rgba(14, 23, 41, 0.12);
+  --ag-control-panel-background-color: #f5f9fe;
+  --ag-column-select-indent-size: 14px;
+}
+
+.claimbridge-ag-grid .ag-root-wrapper {
+  border: none;
+  border-radius: 14px;
+}
+
+.claimbridge-ag-grid .ag-header {
+  border-bottom: 1px solid rgba(156, 177, 201, 0.42);
+}
+
+.claimbridge-ag-grid .ag-header-cell,
+.claimbridge-ag-grid .ag-header-group-cell {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.claimbridge-ag-grid .ag-header-cell-label {
+  gap: 8px;
+}
+
+.claimbridge-ag-grid .ag-floating-filter-body input,
+.claimbridge-ag-grid .ag-floating-filter-body .ag-input-field-input,
+.claimbridge-ag-grid .ag-text-field-input-wrapper input,
+.claimbridge-ag-grid .ag-text-field-input,
+.claimbridge-ag-grid .ag-picker-field-wrapper,
+.claimbridge-ag-grid .ag-input-field-input {
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.claimbridge-ag-grid .ag-row {
+  transition: background-color 120ms ease;
+}
+
+.claimbridge-ag-grid .ag-cell {
+  display: flex;
+  align-items: center;
+  color: #334155;
+}
+
+.claimbridge-ag-grid .ag-paging-panel {
+  min-height: 46px;
+  border-top: 1px solid rgba(156, 177, 201, 0.42);
+  background: linear-gradient(180deg, #f8fbff, #eff5fc);
+  color: #415a77;
+  font-weight: 600;
+}
+
+.claimbridge-ag-grid .ag-paging-button {
+  color: #1b4f77;
+  border-radius: 8px;
+  border: 1px solid #cadcf0;
+  background: #fff;
+}
+
+.claimbridge-ag-grid .ag-paging-button:hover:not(.ag-disabled) {
+  border-color: #7aa8d5;
+  background: #eff6ff;
+}
+
+.claimbridge-ag-grid .ag-overlay-loading-wrapper,
+.claimbridge-ag-grid .ag-overlay-no-rows-wrapper {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(1px);
+}

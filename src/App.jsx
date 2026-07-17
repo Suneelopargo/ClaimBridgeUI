@@ -22,6 +22,7 @@ import { authenticateLogin } from './services/authApi'
 import './App.css'
 
 const AUTH_STORAGE_KEY = 'claimbridge-admin-auth'
+const AUTH_ROLES_STORAGE_KEY = 'claimbridge-user-roles'
 const ENABLE_IDLE_AUTO_LOGOUT = String(
   import.meta.env.VITE_ENABLE_IDLE_AUTO_LOGOUT ?? 'false',
 ).toLowerCase() === 'true'
@@ -89,7 +90,64 @@ const formatStatusTick = (value) => {
 }
 
 function getStoredAuth() {
-  return localStorage.getItem(AUTH_STORAGE_KEY) === 'true'
+  return sessionStorage.getItem(AUTH_STORAGE_KEY) === 'true'
+}
+
+function getStoredRoles() {
+  try {
+    const rawValue = sessionStorage.getItem(AUTH_ROLES_STORAGE_KEY)
+
+    if (!rawValue) {
+      return []
+    }
+
+    const parsedValue = JSON.parse(rawValue)
+
+    if (!Array.isArray(parsedValue)) {
+      return []
+    }
+
+    return parsedValue
+      .map((role) => String(role || '').trim())
+      .filter((role) => role.length > 0)
+  } catch {
+    return []
+  }
+}
+
+function extractRolesFromAuthPayload(payload) {
+  const roleCandidates = [
+    payload?.roles,
+    payload?.data?.roles,
+    payload?.user?.roles,
+  ]
+
+  const roleList = roleCandidates.find((item) => Array.isArray(item))
+
+  if (Array.isArray(roleList)) {
+    return roleList
+      .map((role) => String(role || '').trim())
+      .filter((role) => role.length > 0)
+  }
+
+  const singleRoleCandidates = [
+    payload?.role,
+    payload?.data?.role,
+    payload?.user?.role,
+    payload?.roleDescription,
+    payload?.data?.roleDescription,
+    payload?.user?.roleDescription,
+  ]
+
+  const singleRole = singleRoleCandidates.find(
+    (item) => typeof item === 'string' && item.trim().length > 0,
+  )
+
+  return singleRole ? [singleRole.trim()] : []
+}
+
+function hasSuperuserRole(roles) {
+  return roles.some((role) => role.toLowerCase() === 'superuser')
 }
 
 function clearClientStorage() {
@@ -106,8 +164,14 @@ function clearClientStorage() {
   }
 }
 
-function ProtectedRoute({ isAuthenticated, children }) {
+function ProtectedRoute({ isAuthenticated, children, onUnauthorized }) {
   const location = useLocation()
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      onUnauthorized?.()
+    }
+  }, [isAuthenticated, onUnauthorized])
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />
@@ -150,7 +214,7 @@ function LoginPage({ isAuthenticated, onLogin }) {
         throw new Error('Invalid credentials.')
       }
 
-      onLogin()
+      onLogin(payload)
       const redirectPath = location.state?.from?.pathname || '/dashboard'
       navigate(redirectPath, { replace: true })
     } catch (requestError) {
@@ -857,8 +921,21 @@ function IhxSyncPage() {
   )
 }
 
-function WorkspacePage({ onLogout }) {
+function WorkspacePage({ onLogout, isSuperuser }) {
   const [activeTab, setActiveTab] = useState('dashboard')
+
+  const visibleTabs = useMemo(
+    () => WORKSPACE_TABS.filter((tab) => (tab.id === 'ihx-sync' ? isSuperuser : true)),
+    [isSuperuser],
+  )
+
+  useEffect(() => {
+    const hasActiveTab = visibleTabs.some((tab) => tab.id === activeTab)
+
+    if (!hasActiveTab) {
+      setActiveTab('dashboard')
+    }
+  }, [activeTab, visibleTabs])
 
   return (
     <div className="workspace-shell">
@@ -874,7 +951,7 @@ function WorkspacePage({ onLogout }) {
 
         <div className="workspace-actions">
           <div className="workspace-tabs" role="tablist" aria-label="ClaimBridge workspace tabs">
-            {WORKSPACE_TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const isSelected = activeTab === tab.id
 
               return (
@@ -913,16 +990,21 @@ function WorkspacePage({ onLogout }) {
         <DashboardPage onLogout={onLogout} isActive={activeTab === 'dashboard'} />
       </section>
 
-      <section className={`workspace-view ${activeTab === 'ihx-sync' ? 'workspace-view--active' : ''}`}>
-        <IhxSyncPage />
-      </section>
+      {isSuperuser ? (
+        <section className={`workspace-view ${activeTab === 'ihx-sync' ? 'workspace-view--active' : ''}`}>
+          <IhxSyncPage />
+        </section>
+      ) : null}
 
       <section className={`workspace-view ${activeTab === 'claim-validations' ? 'workspace-view--active' : ''}`}>
         <ClaimValidationsPage />
       </section>
 
       <section className={`workspace-view ${activeTab === 'reconciliation' ? 'workspace-view--active' : ''}`}>
-        <ReconciliationRecordsPage isActive={activeTab === 'reconciliation'} />
+        <ReconciliationRecordsPage
+          isActive={activeTab === 'reconciliation'}
+          canSyncFromPortal={isSuperuser}
+        />
       </section>
     </div>
   )
@@ -930,6 +1012,7 @@ function WorkspacePage({ onLogout }) {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(getStoredAuth)
+  const [roles, setRoles] = useState(getStoredRoles)
   const [showIdleWarning, setShowIdleWarning] = useState(false)
   const [idleCountdownSeconds, setIdleCountdownSeconds] = useState(IDLE_WARNING_LEAD_SECONDS)
   const idleWarningRef = useRef(false)
@@ -959,7 +1042,10 @@ function App() {
     setShowIdleWarning(false)
     clearClientStorage()
     setIsAuthenticated(false)
+    setRoles([])
   }, [clearIdleTimeouts])
+
+  const isSuperuser = useMemo(() => hasSuperuserRole(roles), [roles])
 
   const scheduleIdleTimeouts = useCallback(() => {
     clearIdleTimeouts()
@@ -1013,10 +1099,19 @@ function App() {
     return `${minutes}:${paddedSeconds}`
   }, [idleCountdownSeconds])
 
-  const handleLogin = () => {
-    localStorage.setItem(AUTH_STORAGE_KEY, 'true')
+  const handleLogin = (payload) => {
+    sessionStorage.setItem(AUTH_STORAGE_KEY, 'true')
+    const nextRoles = extractRolesFromAuthPayload(payload)
+    sessionStorage.setItem(AUTH_ROLES_STORAGE_KEY, JSON.stringify(nextRoles))
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      localStorage.removeItem(AUTH_ROLES_STORAGE_KEY)
+    } catch {
+      // Ignore storage failures in restricted contexts.
+    }
     setShowIdleWarning(false)
     setIsAuthenticated(true)
+    setRoles(nextRoles)
   }
 
   const handleLogout = () => {
@@ -1071,8 +1166,8 @@ function App() {
           <Route
             path="/dashboard"
             element={(
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <WorkspacePage onLogout={handleLogout} />
+              <ProtectedRoute isAuthenticated={isAuthenticated} onUnauthorized={executeLogout}>
+                <WorkspacePage onLogout={handleLogout} isSuperuser={isSuperuser} />
               </ProtectedRoute>
             )}
           />

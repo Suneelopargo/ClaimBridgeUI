@@ -1,14 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AgGridReact } from 'ag-grid-react'
+import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
 import * as XLSX from 'xlsx'
 import { API_BASE_URL, buildApiUrl } from '../config/api'
 import LoadingOverlay from './LoadingOverlay'
 import './ReconciliationRecordsPage.css'
+import 'ag-grid-community/styles/ag-grid.css'
+import 'ag-grid-community/styles/ag-theme-quartz.css'
 
 const RECONCILIATION_ENDPOINT = buildApiUrl('/api/reconciliation/records')
 const RECONCILIATION_DOWNLOAD_ENDPOINT = buildApiUrl('/api/reconciliation/download')
 const RECONCILIATION_IMPORT_ENDPOINT = buildApiUrl('/api/reconciliation/import')
 const BACKEND_TARGET_LABEL = API_BASE_URL || 'the current host /api path'
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const API_FETCH_PAGE_SIZE = 100
+
+ModuleRegistry.registerModules([AllCommunityModule])
 
 const GRID_COLUMNS = [
   { key: 'id', label: 'ID' },
@@ -37,18 +44,7 @@ const CURRENCY_COLUMNS = new Set([
 
 const DATE_COLUMNS = new Set(['admittedDate', 'dischargedDate'])
 const DATETIME_COLUMNS = new Set(['updatedAt', 'lastSeenAt'])
-const EDITABLE_COLUMNS = new Set([
-  'patientName',
-  'payorCompanyName',
-  'policyNumber',
-  'claimAuthNumber',
-  'billAmount',
-  'payorAmount',
-  'patientAmount',
-  'amountReceivable',
-  'claimStatus',
-  'hospitalName',
-])
+const EDITABLE_COLUMNS = new Set(['patientName', 'payorCompanyName', 'policyNumber', 'claimAuthNumber', 'billAmount', 'payorAmount', 'patientAmount', 'amountReceivable', 'claimStatus', 'hospitalName'])
 
 const formatCurrency = (value) => {
   if (value === null || value === undefined || value === '') {
@@ -113,12 +109,12 @@ const formatCellValue = (key, value) => {
   return String(value)
 }
 
-export default function ReconciliationRecordsPage({ isActive = true }) {
+export default function ReconciliationRecordsPage({ isActive = true, canSyncFromPortal = false }) {
+  const gridApiRef = useRef(null)
   const [records, setRecords] = useState([])
-  const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(1)
+  const [displayedRowCount, setDisplayedRowCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -126,12 +122,9 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
   const [hospitalFilter, setHospitalFilter] = useState('all')
   const [payorFilter, setPayorFilter] = useState('all')
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [sortConfig, setSortConfig] = useState({ key: 'updatedAt', direction: 'desc' })
   const [isSyncingPortal, setIsSyncingPortal] = useState(false)
   const [syncMessage, setSyncMessage] = useState('')
   const [syncError, setSyncError] = useState('')
-  const [editingRowId, setEditingRowId] = useState(null)
-  const [draftRow, setDraftRow] = useState({})
 
   const fetchRecords = useCallback(async ({ showLoader = true } = {}) => {
     if (showLoader) {
@@ -141,29 +134,64 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
     setError('')
 
     try {
-      const query = new URLSearchParams({
-        page: String(page),
-        page_size: String(pageSize),
-      })
+      const collectedRecords = []
+      let currentPage = 1
+      let totalFromApi = 0
+      let totalPagesFromApi = 0
 
-      const response = await fetch(`${RECONCILIATION_ENDPOINT}?${query.toString()}`)
+      while (true) {
+        const query = new URLSearchParams({
+          page: String(currentPage),
+          page_size: String(API_FETCH_PAGE_SIZE),
+        })
 
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`)
+        const response = await fetch(`${RECONCILIATION_ENDPOINT}?${query.toString()}`)
+
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`)
+        }
+
+        const payload = await response.json()
+        const pageItems = Array.isArray(payload.items) ? payload.items : []
+        const payloadTotal = Number(payload.totalRecords ?? payload.total ?? payload.total_count ?? 0)
+        const payloadTotalPages = Number(payload.total_pages ?? payload.totalPages ?? 0)
+
+        if (payloadTotal > 0) {
+          totalFromApi = payloadTotal
+        }
+
+        if (payloadTotalPages > 0) {
+          totalPagesFromApi = payloadTotalPages
+        }
+
+        collectedRecords.push(...pageItems)
+
+        if (totalPagesFromApi > 0 && currentPage >= totalPagesFromApi) {
+          break
+        }
+
+        if (!pageItems.length) {
+          break
+        }
+
+        if (totalFromApi > 0 && collectedRecords.length >= totalFromApi) {
+          break
+        }
+
+        if (pageItems.length < API_FETCH_PAGE_SIZE) {
+          break
+        }
+
+        currentPage += 1
+
+        if (currentPage > 1000) {
+          throw new Error('Stopped loading records after 1000 pages to avoid an infinite loop.')
+        }
       }
 
-      const payload = await response.json()
-      const nextRecords = Array.isArray(payload.items) ? payload.items : []
-      const nextTotal = Number(
-        payload.totalRecords ?? payload.total ?? payload.total_count ?? 0,
-      )
-      const nextTotalPages =
-        Number(payload.total_pages ?? payload.totalPages ?? 0) ||
-        Math.max(1, Math.ceil((nextTotal || nextRecords.length) / pageSize))
-
-      setRecords(nextRecords)
-      setTotal(nextTotal || nextRecords.length)
-      setTotalPages(nextTotalPages)
+      setRecords(collectedRecords)
+      setTotal(totalFromApi || collectedRecords.length)
+      setDisplayedRowCount(collectedRecords.length)
       setLastUpdated(new Date())
     } catch (requestError) {
       setError(
@@ -173,13 +201,13 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
       )
       setRecords([])
       setTotal(0)
-      setTotalPages(1)
+      setDisplayedRowCount(0)
     } finally {
       if (showLoader) {
         setLoading(false)
       }
     }
-  }, [page, pageSize])
+  }, [])
 
   useEffect(() => {
     if (!isActive) {
@@ -234,8 +262,6 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
   }, [records])
 
   const filteredRecords = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase()
-
     return records.filter((record) => {
       const matchesStatus =
         statusFilter === 'all' ? true : String(record.claimStatus || '') === statusFilter
@@ -248,128 +274,9 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
         return false
       }
 
-      if (!normalizedQuery) {
-        return true
-      }
-
-      return GRID_COLUMNS.some(({ key }) => {
-        const value = record[key]
-        return value !== null &&
-          value !== undefined &&
-          String(value).toLowerCase().includes(normalizedQuery)
-      })
+      return true
     })
-  }, [records, hospitalFilter, payorFilter, searchQuery, statusFilter])
-
-  const sortedRecords = useMemo(() => {
-    const { key, direction } = sortConfig
-
-    const sortableRecords = [...filteredRecords]
-
-    const normalizeValue = (value, columnKey) => {
-      if (value === null || value === undefined || value === '') {
-        return null
-      }
-
-      if (CURRENCY_COLUMNS.has(columnKey)) {
-        const numericValue = Number(value)
-        return Number.isNaN(numericValue) ? null : numericValue
-      }
-
-      if (DATE_COLUMNS.has(columnKey) || DATETIME_COLUMNS.has(columnKey)) {
-        const dateValue = new Date(value).valueOf()
-        return Number.isNaN(dateValue) ? null : dateValue
-      }
-
-      const numericValue = Number(value)
-      if (!Number.isNaN(numericValue) && String(value).trim() !== '') {
-        return numericValue
-      }
-
-      return String(value).toLowerCase()
-    }
-
-    sortableRecords.sort((left, right) => {
-      const leftValue = normalizeValue(left[key], key)
-      const rightValue = normalizeValue(right[key], key)
-
-      if (leftValue === null && rightValue === null) {
-        return 0
-      }
-
-      if (leftValue === null) {
-        return 1
-      }
-
-      if (rightValue === null) {
-        return -1
-      }
-
-      if (leftValue < rightValue) {
-        return direction === 'asc' ? -1 : 1
-      }
-
-      if (leftValue > rightValue) {
-        return direction === 'asc' ? 1 : -1
-      }
-
-      return 0
-    })
-
-    return sortableRecords
-  }, [filteredRecords, sortConfig])
-
-  const paginationItems = useMemo(() => {
-    const items = []
-
-    if (totalPages <= 7) {
-      for (let index = 1; index <= totalPages; index += 1) {
-        items.push(index)
-      }
-
-      return items
-    }
-
-    items.push(1)
-
-    if (page > 4) {
-      items.push('left-ellipsis')
-    }
-
-    const start = Math.max(2, page - 1)
-    const end = Math.min(totalPages - 1, page + 1)
-
-    for (let index = start; index <= end; index += 1) {
-      items.push(index)
-    }
-
-    if (page < totalPages - 3) {
-      items.push('right-ellipsis')
-    }
-
-    items.push(totalPages)
-
-    return items
-  }, [page, totalPages])
-
-  const hasPreviousPage = page > 1
-  const hasNextPage = page < totalPages
-
-  const toggleSort = (columnKey) => {
-    setSortConfig((current) => {
-      if (current.key !== columnKey) {
-        return {
-          key: columnKey,
-          direction: 'asc',
-        }
-      }
-
-      return {
-        key: columnKey,
-        direction: current.direction === 'asc' ? 'desc' : 'asc',
-      }
-    })
-  }
+  }, [records, hospitalFilter, payorFilter, statusFilter])
 
   const syncFromPortal = async () => {
     setSyncError('')
@@ -417,70 +324,24 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
     }
   }
 
-  const beginInlineEdit = (record) => {
-    const nextDraft = {}
-
-    EDITABLE_COLUMNS.forEach((columnKey) => {
-      nextDraft[columnKey] = record[columnKey] ?? ''
-    })
-
-    setEditingRowId(record.id)
-    setDraftRow(nextDraft)
-  }
-
-  const cancelInlineEdit = () => {
-    setEditingRowId(null)
-    setDraftRow({})
-  }
-
-  const updateDraftField = (field, value) => {
-    setDraftRow((current) => ({
-      ...current,
-      [field]: value,
-    }))
-  }
-
-  const saveInlineEdit = (recordId) => {
-    const nextRecord = { ...draftRow }
-
-    CURRENCY_COLUMNS.forEach((columnKey) => {
-      if (!(columnKey in nextRecord)) {
-        return
-      }
-
-      const rawValue = String(nextRecord[columnKey]).trim()
-
-      if (rawValue === '') {
-        nextRecord[columnKey] = null
-        return
-      }
-
-      const parsed = Number(rawValue)
-      nextRecord[columnKey] = Number.isNaN(parsed) ? null : parsed
-    })
-
-    setRecords((current) =>
-      current.map((record) =>
-        record.id === recordId
-          ? {
-              ...record,
-              ...nextRecord,
-              updatedAt: new Date().toISOString(),
-            }
-          : record,
-      ),
-    )
-
-    setLastUpdated(new Date())
-    cancelInlineEdit()
-  }
-
   const handleExport = () => {
-    if (!filteredRecords.length) {
+    const exportSourceRows = []
+
+    if (gridApiRef.current) {
+      gridApiRef.current.forEachNodeAfterFilterAndSort((node) => {
+        if (node.data) {
+          exportSourceRows.push(node.data)
+        }
+      })
+    }
+
+    const rowsToExport = exportSourceRows.length ? exportSourceRows : filteredRecords
+
+    if (!rowsToExport.length) {
       return
     }
 
-    const exportRows = filteredRecords.map((record) => {
+    const exportRows = rowsToExport.map((record) => {
       const row = {}
 
       GRID_COLUMNS.forEach(({ key, label }) => {
@@ -496,8 +357,130 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Reconciliation Records')
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-    XLSX.writeFile(workbook, `reconciliation-records-page-${page}-${stamp}.xlsx`)
+    XLSX.writeFile(workbook, `reconciliation-records-${stamp}.xlsx`)
   }
+
+  const defaultColDef = useMemo(
+    () => ({
+      sortable: true,
+      filter: true,
+      floatingFilter: true,
+      resizable: true,
+      minWidth: 140,
+      flex: 1,
+    }),
+    [],
+  )
+
+  const noRowsOverlayTemplate = useMemo(
+    () => '<span class="reconciliation-grid-empty-message">No records match the current filters.</span>',
+    [],
+  )
+
+  const columnDefs = useMemo(
+    () =>
+      GRID_COLUMNS.map((column) => {
+        const isCurrency = CURRENCY_COLUMNS.has(column.key)
+        const isDate = DATE_COLUMNS.has(column.key)
+        const isDateTime = DATETIME_COLUMNS.has(column.key)
+        const isEditable = EDITABLE_COLUMNS.has(column.key)
+
+        const baseDef = {
+          field: column.key,
+          headerName: column.label,
+          editable: isEditable,
+        }
+
+        if (isCurrency) {
+          return {
+            ...baseDef,
+            type: 'numericColumn',
+            cellClass: 'reconciliation-cell--numeric',
+            valueFormatter: (params) => formatCellValue(column.key, params.value),
+            valueParser: (params) => {
+              const rawValue = String(params.newValue ?? '').trim()
+
+              if (rawValue === '') {
+                return null
+              }
+
+              const parsed = Number(rawValue)
+              return Number.isNaN(parsed) ? params.oldValue : parsed
+            },
+          }
+        }
+
+        if (isDate || isDateTime) {
+          return {
+            ...baseDef,
+            valueFormatter: (params) => formatCellValue(column.key, params.value),
+            comparator: (left, right) => {
+              const leftValue = new Date(left).valueOf()
+              const rightValue = new Date(right).valueOf()
+
+              if (Number.isNaN(leftValue) && Number.isNaN(rightValue)) {
+                return 0
+              }
+
+              if (Number.isNaN(leftValue)) {
+                return 1
+              }
+
+              if (Number.isNaN(rightValue)) {
+                return -1
+              }
+
+              return leftValue - rightValue
+            },
+          }
+        }
+
+        if (column.key === 'claimStatus') {
+          return {
+            ...baseDef,
+            cellEditor: 'agSelectCellEditor',
+            filter: 'agSetColumnFilter',
+            cellEditorParams: {
+              values: claimStatuses,
+            },
+          }
+        }
+
+        return {
+          ...baseDef,
+        }
+      }),
+    [claimStatuses],
+  )
+
+  const handleGridReady = useCallback((params) => {
+    gridApiRef.current = params.api
+    setDisplayedRowCount(params.api.getDisplayedRowCount())
+  }, [])
+
+  const handleGridFilterChanged = useCallback(() => {
+    if (!gridApiRef.current) {
+      return
+    }
+
+    setDisplayedRowCount(gridApiRef.current.getDisplayedRowCount())
+  }, [])
+
+  const handleCellValueChanged = useCallback((event) => {
+    const updatedRecord = event.data
+
+    setRecords((current) =>
+      current.map((record) =>
+        record.id === updatedRecord.id
+          ? {
+              ...updatedRecord,
+              updatedAt: new Date().toISOString(),
+            }
+          : record,
+      ),
+    )
+    setLastUpdated(new Date())
+  }, [])
 
   const lastUpdatedLabel = lastUpdated
     ? new Intl.DateTimeFormat('en-IN', {
@@ -526,7 +509,7 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
             <p>Search, filter, paginate, and export records from the backend reconciliation endpoint.</p>
           </div>
           <div className="reconciliation-heading-meta">
-            <span className="status-pill">Page {page} of {totalPages}</span>
+            <span className="status-pill">AG Grid client pagination</span>
             <span className="status-pill status-pill--soft">Last sync: {lastUpdatedLabel}</span>
           </div>
         </div>
@@ -585,10 +568,7 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
             <span>Page size</span>
             <select
               value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value))
-                setPage(1)
-              }}
+              onChange={(event) => setPageSize(Number(event.target.value))}
             >
               {PAGE_SIZE_OPTIONS.map((option) => (
                 <option key={option} value={option}>{option}</option>
@@ -605,14 +585,16 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
             Refresh
           </button>
 
-          <button
-            type="button"
-            className="secondary-button reconciliation-sync-button"
-            onClick={syncFromPortal}
-            disabled={isSyncingPortal}
-          >
-            {isSyncingPortal ? 'Syncing from portal...' : 'Sync From Portal'}
-          </button>
+          {canSyncFromPortal ? (
+            <button
+              type="button"
+              className="secondary-button reconciliation-sync-button"
+              onClick={syncFromPortal}
+              disabled={isSyncingPortal}
+            >
+              {isSyncingPortal ? 'Syncing from portal...' : 'Sync From Portal'}
+            </button>
+          ) : null}
 
           <button
             type="button"
@@ -638,165 +620,32 @@ export default function ReconciliationRecordsPage({ isActive = true }) {
         ) : null}
 
         <div className="reconciliation-summary">
-          <span>Total records (server): {total}</span>
-          <span>Records shown (after filter): {sortedRecords.length}</span>
+          <span>Total records (all pages loaded): {total}</span>
+          <span>Records shown (after filter): {displayedRowCount}</span>
         </div>
 
-        <div className="reconciliation-grid-wrap">
-          <table className="reconciliation-grid">
-            <thead>
-              <tr>
-                <th scope="col">Actions</th>
-                {GRID_COLUMNS.map((column) => (
-                  <th key={column.key} scope="col">
-                    <button
-                      type="button"
-                      className={`reconciliation-sort ${sortConfig.key === column.key ? 'reconciliation-sort--active' : ''}`}
-                      onClick={() => toggleSort(column.key)}
-                    >
-                      <span>{column.label}</span>
-                      <span className="reconciliation-sort-indicator" aria-hidden="true">
-                        {sortConfig.key === column.key
-                          ? sortConfig.direction === 'asc'
-                            ? '▲'
-                            : '▼'
-                          : '↕'}
-                      </span>
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRecords.length ? (
-                sortedRecords.map((record) => (
-                  <tr key={record.id}>
-                    <td className="reconciliation-row-actions">
-                      {editingRowId === record.id ? (
-                        <>
-                          <button
-                            type="button"
-                            className="reconciliation-icon-button reconciliation-icon-button--save"
-                            onClick={() => saveInlineEdit(record.id)}
-                            title="Save row"
-                            aria-label="Save row"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            type="button"
-                            className="reconciliation-icon-button reconciliation-icon-button--cancel"
-                            onClick={cancelInlineEdit}
-                            title="Cancel edit"
-                            aria-label="Cancel edit"
-                          >
-                            ✕
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="reconciliation-icon-button reconciliation-icon-button--edit"
-                          onClick={() => beginInlineEdit(record)}
-                          title="Edit row"
-                          aria-label="Edit row"
-                        >
-                          ✎
-                        </button>
-                      )}
-                    </td>
-                    {GRID_COLUMNS.map((column) => (
-                      <td key={`${record.id}-${column.key}`}>
-                        {editingRowId === record.id && EDITABLE_COLUMNS.has(column.key) ? (
-                          column.key === 'claimStatus' ? (
-                            <select
-                              className="reconciliation-cell-editor"
-                              value={draftRow[column.key] ?? ''}
-                              onChange={(event) => updateDraftField(column.key, event.target.value)}
-                            >
-                              {Array.from(new Set([
-                                ...claimStatuses,
-                                String(record.claimStatus || ''),
-                              ]))
-                                .filter((value) => value)
-                                .map((status) => (
-                                  <option key={status} value={status}>{status}</option>
-                                ))}
-                            </select>
-                          ) : (
-                            <input
-                              className="reconciliation-cell-editor"
-                              type={CURRENCY_COLUMNS.has(column.key) ? 'number' : 'text'}
-                              step={CURRENCY_COLUMNS.has(column.key) ? '0.01' : undefined}
-                              value={draftRow[column.key] ?? ''}
-                              onChange={(event) => updateDraftField(column.key, event.target.value)}
-                            />
-                          )
-                        ) : (
-                          formatCellValue(column.key, record[column.key])
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={GRID_COLUMNS.length + 1} className="reconciliation-grid-empty">
-                    No records match current filters on this page.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="reconciliation-pagination">
-          <button
-            type="button"
-            className="secondary-button"
-            aria-label="Go to previous page"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={!hasPreviousPage}
-          >
-            Previous
-          </button>
-
-          <div className="reconciliation-page-numbers" role="navigation" aria-label="Page numbers">
-            {paginationItems.map((item) => {
-              if (typeof item === 'string') {
-                return (
-                  <span key={item} className="reconciliation-page-ellipsis" aria-hidden="true">
-                    ...
-                  </span>
-                )
-              }
-
-              const isCurrent = item === page
-
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  className={`reconciliation-page-button ${isCurrent ? 'reconciliation-page-button--active' : ''}`}
-                  onClick={() => setPage(item)}
-                  aria-current={isCurrent ? 'page' : undefined}
-                >
-                  {item}
-                </button>
-              )
-            })}
+        <div className="reconciliation-grid-wrap claimbridge-ag-grid-shell">
+          <div className="ag-theme-quartz claimbridge-ag-grid reconciliation-ag-grid">
+            <AgGridReact
+              rowData={filteredRecords}
+              columnDefs={columnDefs}
+              defaultColDef={defaultColDef}
+              quickFilterText={searchQuery}
+              pagination
+              paginationPageSize={pageSize}
+              paginationPageSizeSelector={PAGE_SIZE_OPTIONS}
+              overlayNoRowsTemplate={noRowsOverlayTemplate}
+              rowHeight={42}
+              headerHeight={46}
+              getRowId={(params) => String(params.data.id)}
+              onGridReady={handleGridReady}
+              onFilterChanged={handleGridFilterChanged}
+              onFirstDataRendered={handleGridFilterChanged}
+              onModelUpdated={handleGridFilterChanged}
+              onCellValueChanged={handleCellValueChanged}
+              animateRows
+            />
           </div>
-
-          <span className="reconciliation-page-meta">Page {page} of {totalPages}</span>
-          <button
-            type="button"
-            className="secondary-button"
-            aria-label="Go to next page"
-            onClick={() => setPage((current) => current + 1)}
-            disabled={!hasNextPage}
-          >
-            Next
-          </button>
         </div>
       </section>
     </main>
