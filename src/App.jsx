@@ -22,6 +22,9 @@ import { authenticateLogin } from './services/authApi'
 import './App.css'
 
 const AUTH_STORAGE_KEY = 'claimbridge-admin-auth'
+const ENABLE_IDLE_AUTO_LOGOUT = String(
+  import.meta.env.VITE_ENABLE_IDLE_AUTO_LOGOUT ?? 'false',
+).toLowerCase() === 'true'
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000
 const IDLE_WARNING_LEAD_MS = 2 * 60 * 1000
 const IDLE_WARNING_TIMEOUT_MS = IDLE_TIMEOUT_MS - IDLE_WARNING_LEAD_MS
@@ -1021,6 +1024,13 @@ function App() {
   }
 
   useEffect(() => {
+    if (!ENABLE_IDLE_AUTO_LOGOUT) {
+      setShowIdleWarning(false)
+      clearIdleTimeouts()
+
+      return undefined
+    }
+
     if (!isAuthenticated) {
       clearIdleTimeouts()
 
