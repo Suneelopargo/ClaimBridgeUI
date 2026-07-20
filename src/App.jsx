@@ -19,10 +19,12 @@ import LoadingOverlay from './components/LoadingOverlay'
 import ClaimValidationsPage from './components/ClaimValidationsPage'
 import ReconciliationRecordsPage from './components/ReconciliationRecordsPage'
 import { authenticateLogin } from './services/authApi'
+import { createActivityLog, fetchActivityLogs } from './services/activityLogApi'
 import './App.css'
 
 const AUTH_STORAGE_KEY = 'claimbridge-admin-auth'
 const AUTH_ROLES_STORAGE_KEY = 'claimbridge-user-roles'
+const AUTH_USER_STORAGE_KEY = 'claimbridge-user-data'
 const ENABLE_IDLE_AUTO_LOGOUT = String(
   import.meta.env.VITE_ENABLE_IDLE_AUTO_LOGOUT ?? 'false',
 ).toLowerCase() === 'true'
@@ -46,6 +48,7 @@ const WORKSPACE_TABS = [
   { id: 'ihx-sync', label: 'IHX Ingestion' },
   { id: 'claim-validations', label: 'Claim Validations' },
   { id: 'reconciliation', label: 'Reconciliation Grid' },
+  { id: 'activity-log', label: 'Activity Log' },
 ]
 
 const formatCurrency = (value) =>
@@ -115,6 +118,26 @@ function getStoredRoles() {
   }
 }
 
+function getStoredUser() {
+  try {
+    const rawValue = sessionStorage.getItem(AUTH_USER_STORAGE_KEY)
+
+    if (!rawValue) {
+      return null
+    }
+
+    const parsedValue = JSON.parse(rawValue)
+
+    if (!parsedValue || typeof parsedValue !== 'object') {
+      return null
+    }
+
+    return parsedValue
+  } catch {
+    return null
+  }
+}
+
 function extractRolesFromAuthPayload(payload) {
   const roleCandidates = [
     payload?.roles,
@@ -162,6 +185,25 @@ function clearClientStorage() {
   } catch {
     // Ignore storage failures in restricted contexts.
   }
+}
+
+function resolveUserName(userData) {
+  const userNameCandidates = [
+    userData?.username,
+    userData?.userName,
+    userData?.fullName,
+    userData?.name,
+  ]
+
+  const firstValidUserName = userNameCandidates.find(
+    (value) => typeof value === 'string' && value.trim().length > 0,
+  )
+
+  return firstValidUserName ? firstValidUserName.trim() : null
+}
+
+function resolvePrimaryRole(roles) {
+  return roles.find((role) => typeof role === 'string' && role.trim().length > 0) || ''
 }
 
 function ProtectedRoute({ isAuthenticated, children, onUnauthorized }) {
@@ -257,7 +299,7 @@ function LoginPage({ isAuthenticated, onLogin }) {
       <section className="auth-panel auth-panel--form">
         <div className="auth-card">
           <div>
-            <span className="badge">Admin Access</span>
+            
             <h2>Welcome back</h2>
             <p className="auth-copy">Use the demo administrator credentials to continue.</p>
           </div>
@@ -921,13 +963,324 @@ function IhxSyncPage() {
   )
 }
 
-function WorkspacePage({ onLogout, isSuperuser }) {
+function ActivityLogPage({ isActive = false, currentRole }) {
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [userFilter, setUserFilter] = useState('all')
+  const [actionFilter, setActionFilter] = useState('all')
+  const [targetFilter, setTargetFilter] = useState('all')
+  const [ipFilter, setIpFilter] = useState('')
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const allLogs = []
+      let currentPage = 1
+      let totalFromApi = 0
+
+      while (true) {
+        const payload = await fetchActivityLogs({
+          role: currentRole,
+          page: currentPage,
+          pageSize: 200,
+        })
+
+        const pageItems = Array.isArray(payload?.items) ? payload.items : []
+        const payloadTotal = Number(payload?.total || 0)
+
+        if (payloadTotal > 0) {
+          totalFromApi = payloadTotal
+        }
+
+        allLogs.push(...pageItems)
+
+        if (!pageItems.length) {
+          break
+        }
+
+        if (totalFromApi > 0 && allLogs.length >= totalFromApi) {
+          break
+        }
+
+        if (pageItems.length < 200) {
+          break
+        }
+
+        currentPage += 1
+
+        if (currentPage > 1000) {
+          throw new Error('Stopped loading activity logs after 1000 pages to avoid an infinite loop.')
+        }
+      }
+
+      setLogs(allLogs)
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : 'Unable to load activity logs.',
+      )
+      setLogs([])
+    } finally {
+      setLoading(false)
+    }
+  }, [currentRole])
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+
+    loadLogs()
+  }, [isActive, loadLogs])
+
+  useEffect(() => {
+    setPage(1)
+  }, [pageSize, searchQuery, userFilter, actionFilter, targetFilter, ipFilter])
+
+  const userOptions = useMemo(() => {
+    const values = logs
+      .map((item) => item.username)
+      .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+
+    return Array.from(new Set(values.map((value) => String(value)))).sort((a, b) =>
+      a.localeCompare(b),
+    )
+  }, [logs])
+
+  const actionOptions = useMemo(() => {
+    const values = logs
+      .map((item) => item.action_type)
+      .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+
+    return Array.from(new Set(values.map((value) => String(value)))).sort((a, b) =>
+      a.localeCompare(b),
+    )
+  }, [logs])
+
+  const targetOptions = useMemo(() => {
+    const values = logs
+      .map((item) => item.target)
+      .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+
+    return Array.from(new Set(values.map((value) => String(value)))).sort((a, b) =>
+      a.localeCompare(b),
+    )
+  }, [logs])
+
+  const filteredLogs = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase()
+    const normalizedIpFilter = ipFilter.trim().toLowerCase()
+
+    return logs.filter((item) => {
+      const matchesUser = userFilter === 'all' ? true : String(item.username || '') === userFilter
+      const matchesAction = actionFilter === 'all' ? true : String(item.action_type || '') === actionFilter
+      const matchesTarget = targetFilter === 'all' ? true : String(item.target || '') === targetFilter
+      const matchesIp = normalizedIpFilter.length
+        ? String(item.ip_address || '').toLowerCase().includes(normalizedIpFilter)
+        : true
+
+      if (!matchesUser || !matchesAction || !matchesTarget || !matchesIp) {
+        return false
+      }
+
+      if (!normalizedSearch) {
+        return true
+      }
+
+      const timestampLabel = item.timestamp
+        ? new Date(item.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+        : ''
+
+      const searchableText = [
+        item.username,
+        item.action_type,
+        item.target,
+        item.details,
+        item.ip_address,
+        timestampLabel,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ')
+
+      return searchableText.includes(normalizedSearch)
+    })
+  }, [logs, searchQuery, userFilter, actionFilter, targetFilter, ipFilter])
+
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize))
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [page, totalPages])
+
+  const paginatedLogs = useMemo(() => {
+    const startIndex = (page - 1) * pageSize
+    return filteredLogs.slice(startIndex, startIndex + pageSize)
+  }, [filteredLogs, page, pageSize])
+
+  return (
+    <main className="dashboard-shell activity-log-shell">
+      <section className="panel activity-log-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Audit Trail</span>
+            <h2>User Activity Log</h2>
+            <p>Superuser view of tracked screen access and user actions.</p>
+          </div>
+        </div>
+
+        <div className="activity-log-controls">
+          <label className="activity-log-search">
+            <span>Overall Search</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search user, action, target, details, ip..."
+            />
+          </label>
+
+        
+
+          
+
+          
+
+
+          <label>
+            <span>Rows per page</span>
+            <select
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value))
+                setPage(1)
+              }}
+            >
+              {[10, 25, 50, 100].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
+
+          <button type="button" className="secondary-button" onClick={loadLogs} disabled={loading}>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
+
+        {error ? <p className="form-error">{error}</p> : null}
+
+        <div className="activity-log-table-wrap">
+          <table className="activity-log-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Details</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="activity-log-empty">
+                    {loading ? 'Loading activity logs...' : 'No activity logs found for current filters.'}
+                  </td>
+                </tr>
+              ) : (
+                paginatedLogs.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      {item.timestamp
+                        ? new Date(item.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+                        : '-'}
+                    </td>
+                    <td>{item.username || '-'}</td>
+                    <td>{item.action_type}</td>
+                    <td>{item.target}</td>
+                    <td>{item.details || '-'}</td>
+                    <td>{item.ip_address || '-'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="activity-log-pagination">
+          <span>Showing {filteredLogs.length} records · Page {page} of {totalPages}</span>
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page <= 1 || loading}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={page >= totalPages || loading}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
   const [activeTab, setActiveTab] = useState('dashboard')
+  const lastLoggedTabRef = useRef('')
 
   const visibleTabs = useMemo(
-    () => WORKSPACE_TABS.filter((tab) => (tab.id === 'ihx-sync' ? isSuperuser : true)),
+    () => WORKSPACE_TABS.filter((tab) => {
+      if (tab.id === 'ihx-sync' || tab.id === 'activity-log') {
+        return isSuperuser
+      }
+
+      return true
+    }),
     [isSuperuser],
   )
+
+  useEffect(() => {
+    if (!activeTab || activeTab === lastLoggedTabRef.current) {
+      return
+    }
+
+    if (activeTab === 'activity-log') {
+      return
+    }
+
+    const matchingTab = visibleTabs.find((tab) => tab.id === activeTab)
+
+    if (!matchingTab) {
+      return
+    }
+
+    lastLoggedTabRef.current = activeTab
+
+    createActivityLog({
+      username,
+      actionType: 'screen_access',
+      target: activeTab,
+      details: `Opened workspace tab: ${matchingTab.label}`,
+    }).catch(() => {
+      // Non-blocking by design: access logging failures should not break UI usage.
+    })
+  }, [activeTab, currentRole, username, visibleTabs])
 
   useEffect(() => {
     const hasActiveTab = visibleTabs.some((tab) => tab.id === activeTab)
@@ -1006,6 +1359,15 @@ function WorkspacePage({ onLogout, isSuperuser }) {
           canSyncFromPortal={isSuperuser}
         />
       </section>
+
+      {isSuperuser ? (
+        <section className={`workspace-view ${activeTab === 'activity-log' ? 'workspace-view--active' : ''}`}>
+          <ActivityLogPage
+            isActive={activeTab === 'activity-log'}
+            currentRole={currentRole}
+          />
+        </section>
+      ) : null}
     </div>
   )
 }
@@ -1013,6 +1375,7 @@ function WorkspacePage({ onLogout, isSuperuser }) {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(getStoredAuth)
   const [roles, setRoles] = useState(getStoredRoles)
+  const [userData, setUserData] = useState(getStoredUser)
   const [showIdleWarning, setShowIdleWarning] = useState(false)
   const [idleCountdownSeconds, setIdleCountdownSeconds] = useState(IDLE_WARNING_LEAD_SECONDS)
   const idleWarningRef = useRef(false)
@@ -1043,9 +1406,12 @@ function App() {
     clearClientStorage()
     setIsAuthenticated(false)
     setRoles([])
+    setUserData(null)
   }, [clearIdleTimeouts])
 
   const isSuperuser = useMemo(() => hasSuperuserRole(roles), [roles])
+  const currentRole = useMemo(() => resolvePrimaryRole(roles), [roles])
+  const currentUsername = useMemo(() => resolveUserName(userData), [userData])
 
   const scheduleIdleTimeouts = useCallback(() => {
     clearIdleTimeouts()
@@ -1102,19 +1468,41 @@ function App() {
   const handleLogin = (payload) => {
     sessionStorage.setItem(AUTH_STORAGE_KEY, 'true')
     const nextRoles = extractRolesFromAuthPayload(payload)
+    const nextUserData = payload?.user && typeof payload.user === 'object' ? payload.user : null
     sessionStorage.setItem(AUTH_ROLES_STORAGE_KEY, JSON.stringify(nextRoles))
+    sessionStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(nextUserData))
     try {
       localStorage.removeItem(AUTH_STORAGE_KEY)
       localStorage.removeItem(AUTH_ROLES_STORAGE_KEY)
+      localStorage.removeItem(AUTH_USER_STORAGE_KEY)
     } catch {
       // Ignore storage failures in restricted contexts.
     }
     setShowIdleWarning(false)
     setIsAuthenticated(true)
     setRoles(nextRoles)
+    setUserData(nextUserData)
+
+    createActivityLog({
+      username: resolveUserName(nextUserData),
+      actionType: 'login',
+      target: 'dashboard',
+      details: 'User logged in successfully',
+    }).catch(() => {
+      // Non-blocking by design: login should proceed even if logging fails.
+    })
   }
 
   const handleLogout = () => {
+    createActivityLog({
+      username: currentUsername,
+      actionType: 'logout',
+      target: 'session',
+      details: 'User logged out',
+    }).catch(() => {
+      // Non-blocking by design: logout should proceed even if logging fails.
+    })
+
     executeLogout()
   }
 
@@ -1167,7 +1555,12 @@ function App() {
             path="/dashboard"
             element={(
               <ProtectedRoute isAuthenticated={isAuthenticated} onUnauthorized={executeLogout}>
-                <WorkspacePage onLogout={handleLogout} isSuperuser={isSuperuser} />
+                <WorkspacePage
+                  onLogout={handleLogout}
+                  isSuperuser={isSuperuser}
+                  currentRole={currentRole}
+                  username={currentUsername}
+                />
               </ProtectedRoute>
             )}
           />

@@ -1164,3 +1164,129 @@
     gap: 10px;
   }
 }
+
+.activity-log-shell {
+  width: min(1480px, 100%);
+}
+
+.activity-log-panel {
+  background: linear-gradient(#fffffff7, #f7fbfff0);
+  border: 1px solid #8ba4c238;
+  gap: 14px;
+  padding: 22px;
+  display: grid;
+}
+
+.activity-log-controls {
+  gap: 12px;
+  align-items: end;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(140px, 1fr)) auto;
+}
+
+.activity-log-controls label {
+  gap: 8px;
+  display: grid;
+}
+
+.activity-log-search {
+  grid-column: span 2;
+}
+
+.activity-log-controls span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.activity-log-controls select {
+  color: var(--heading-color);
+  background: #f8fafceb;
+  border: 1px solid #94a3b842;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.activity-log-controls input {
+  color: var(--heading-color);
+  background: #f8fafceb;
+  border: 1px solid #94a3b842;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.activity-log-controls input:focus,
+.activity-log-controls select:focus {
+  border-color: #0284c7;
+  outline: none;
+  box-shadow: 0 0 0 3px #0284c729;
+}
+
+.activity-log-table-wrap {
+  border: 1px solid #94a3b833;
+  border-radius: 14px;
+  overflow: auto;
+}
+
+.activity-log-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 900px;
+}
+
+.activity-log-table th,
+.activity-log-table td {
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0cc;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.activity-log-table th {
+  color: var(--heading-color);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: #f1f5f9;
+  font-size: 0.78rem;
+}
+
+.activity-log-empty {
+  text-align: center;
+  color: var(--muted);
+}
+
+.activity-log-pagination {
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  display: flex;
+}
+
+.activity-log-pagination div {
+  gap: 8px;
+  display: flex;
+}
+
+@media (max-width: 640px) {
+  .activity-log-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .activity-log-controls {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .activity-log-search {
+    grid-column: auto;
+  }
+
+  .activity-log-pagination div {
+    width: 100%;
+  }
+
+  .activity-log-pagination button {
+    width: 100%;
+  }
+}

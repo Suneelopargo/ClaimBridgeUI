@@ -576,14 +576,14 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
             </select>
           </label>
 
-          <button
+          {/* <button
             type="button"
             className="secondary-button"
             onClick={() => fetchRecords({ showLoader: true })}
             disabled={isSyncingPortal}
           >
             Refresh
-          </button>
+          </button> */}
 
           {canSyncFromPortal ? (
             <button
