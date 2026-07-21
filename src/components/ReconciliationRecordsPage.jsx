@@ -466,6 +466,22 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
     setDisplayedRowCount(gridApiRef.current.getDisplayedRowCount())
   }, [])
 
+  const handleClearFilters = useCallback(() => {
+    setSearchQuery('')
+    setStatusFilter('all')
+    setHospitalFilter('all')
+    setPayorFilter('all')
+
+    if (gridApiRef.current) {
+      gridApiRef.current.setFilterModel(null)
+      gridApiRef.current.onFilterChanged()
+      setDisplayedRowCount(gridApiRef.current.getDisplayedRowCount())
+      return
+    }
+
+    setDisplayedRowCount(records.length)
+  }, [records])
+
   const handleCellValueChanged = useCallback((event) => {
     const updatedRecord = event.data
 
@@ -575,6 +591,10 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
               ))}
             </select>
           </label>
+
+          <button type="button" className="secondary-button" onClick={handleClearFilters}>
+            Clear Filters
+          </button>
 
           {/* <button
             type="button"
