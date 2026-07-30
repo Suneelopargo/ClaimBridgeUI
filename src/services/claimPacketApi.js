@@ -66,6 +66,26 @@ export async function getClaimPacketReview(claimId) {
   return payload
 }
 
+export async function getClaimPacketReviewedList(claimId) {
+  const response = await fetch(buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/reviewedlist`), {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  const payload = await readJsonPayload(response)
+
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      getResponseErrorMessage(payload, `Unable to load claim packet reviewed list: ${response.status}`),
+    )
+  }
+
+  return payload
+}
+
+
 export async function saveClaimPacketReview(claimId, reviewPayload) {
   const response = await fetch(buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/review`), {
     method: 'PUT',
@@ -104,6 +124,111 @@ export async function validateCustomerDispatchChecklist(claimId) {
   if (!response.ok || payload?.success === false) {
     throw new Error(
       getResponseErrorMessage(payload, `Validation failed with status ${response.status}`),
+    )
+  }
+
+  return payload
+}
+
+export async function updateChecklistItemDecision(claimId, checklistItemId, decisionData) {
+  const response = await fetch(
+    buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(checklistItemId)}`),
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(decisionData),
+    },
+  )
+
+  const payload = await readJsonPayload(response)
+
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      getResponseErrorMessage(payload, `Unable to update checklist item: ${response.status}`),
+    )
+  }
+
+  return payload
+}
+
+export async function uploadChecklistDocument(
+  claimId,
+  checklistItemId,
+  file,
+  documentType,
+  displayName,
+  reviewerRemarks,
+) {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (documentType) formData.append('documentType', documentType)
+  if (displayName) formData.append('displayName', displayName)
+  if (reviewerRemarks) formData.append('reviewerRemarks', reviewerRemarks)
+
+  const response = await fetch(
+    buildApiUrl(
+      `${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(checklistItemId)}/documents`,
+    ),
+    {
+      method: 'POST',
+      body: formData,
+    },
+  )
+
+  const payload = await readJsonPayload(response)
+
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      getResponseErrorMessage(payload, `Unable to upload document: ${response.status}`),
+    )
+  }
+
+  return payload
+}
+
+export async function getClaimPacketChecklistReview(claimId) {
+  const response = await fetch(
+    buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-review`),
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  )
+
+  const payload = await readJsonPayload(response)
+
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      getResponseErrorMessage(payload, `Unable to load checklist review document: ${response.status}`),
+    )
+  }
+
+  return payload
+}
+
+export async function getClaimPacketChecklistItemDetail(claimId, itemId) {
+  const response = await fetch(
+    buildApiUrl(
+      `${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(itemId)}`,
+    ),
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  )
+
+  const payload = await readJsonPayload(response)
+
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      getResponseErrorMessage(payload, `Unable to load checklist item detail: ${response.status}`),
     )
   }
 

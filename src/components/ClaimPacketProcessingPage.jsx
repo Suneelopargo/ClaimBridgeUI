@@ -4,6 +4,7 @@ import 'ag-grid-community/styles/ag-theme-quartz.css'
 import { buildApiUrl } from '../config/api'
 import {
   getClaimPacketReview,
+  getClaimPacketReviewedList,
   processCustomerClaimPacket,
   saveClaimPacketReview,
 } from '../services/claimPacketApi'
@@ -111,9 +112,36 @@ export default function ClaimPacketProcessingPage() {
       setSelectedGroupId('')
       setSourceGroupId('')
       setPagesToAssign([])
-      setGroupPageAssignments(
-        Object.fromEntries(loadedGroups.map((group) => [group.groupId, [...(group.sourcePages || [])]])),
+
+      let initialAssignments = Object.fromEntries(
+        loadedGroups.map((group) => [group.groupId, [...(group.sourcePages || [])]]),
       )
+
+      try {
+        const reviewedListPayload = await getClaimPacketReviewedList(requestedClaimId)
+        const reviewedGroups = reviewedListPayload?.result?.groups ?? []
+
+        if (reviewedGroups.length > 0) {
+          for (const rg of reviewedGroups) {
+            const match =
+              loadedGroups.find((g) => g.groupId === rg.groupId) ||
+              loadedGroups.find((g) => g.documentType === rg.documentType) ||
+              loadedGroups.find((g) => g.displayName === rg.displayName)
+
+            const targetGroupId = match?.groupId || rg.groupId
+            if (targetGroupId) {
+              const pNums = rg.pageNumbers || rg.sourcePages || []
+              if (pNums.length > 0) {
+                initialAssignments[targetGroupId] = pNums
+              }
+            }
+          }
+        }
+      } catch {
+        // Fallback to baseline groups if reviewedlist is not available yet
+      }
+
+      setGroupPageAssignments(initialAssignments)
       setAvailablePageNumbers(
         (payload?.result?.unassignedPages ?? [])
           .map((page) => page.pageNumber ?? page.sourcePageNumber)

@@ -46,7 +46,6 @@ const REFRESH_OPTIONS = [0, 30, 60, 300]
 
 const WORKSPACE_TABS = [
   { id: 'dashboard', label: 'Claims Dashboard' },
-  { id: 'claim-packet-processing', label: 'Claim Packet Processing' },
   { id: 'ihx-sync', label: 'IHX Ingestion' },
   { id: 'claim-validations', label: 'Claim Validations' },
   { id: 'reconciliation', label: 'Reconciliation Grid' },

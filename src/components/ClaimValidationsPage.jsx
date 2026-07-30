@@ -3,9 +3,14 @@ import { AgGridReact } from 'ag-grid-react'
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
 import { buildApiUrl } from '../config/api'
 import {
+  getClaimPacketChecklistItemDetail,
+  getClaimPacketChecklistReview,
   getClaimPacketReview,
+  getClaimPacketReviewedList,
   processCustomerClaimPacket,
   saveClaimPacketReview,
+  updateChecklistItemDecision,
+  uploadChecklistDocument,
   validateCustomerDispatchChecklist,
 } from '../services/claimPacketApi'
 import LoadingOverlay from './LoadingOverlay'
@@ -87,12 +92,251 @@ export default function ClaimValidationsPage() {
   const [selectedGroupPreviewUrl, setSelectedGroupPreviewUrl] = useState('')
   const [isGroupModalOpen, setGroupModalOpen] = useState(false)
   const [isReviewModalOpen, setReviewModalOpen] = useState(false)
+  const [reviewedListResult, setReviewedListResult] = useState(null)
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState('')
+  const [selectedChecklistItem, setSelectedChecklistItem] = useState(null)
+  const [isChecklistActionModalOpen, setChecklistActionModalOpen] = useState(false)
+  const [checklistDecisionOption, setChecklistDecisionOption] = useState('')
+  const [checklistRemarks, setChecklistRemarks] = useState('')
+  const [checklistActionLoading, setChecklistActionLoading] = useState(false)
+  const [checklistActionError, setChecklistActionError] = useState('')
+  const [checklistActionSuccess, setChecklistActionSuccess] = useState('')
+  const [checklistStatusOverrides, setChecklistStatusOverrides] = useState({})
+
+  const [selectedUploadItem, setSelectedUploadItem] = useState(null)
+  const [isUploadModalOpen, setUploadModalOpen] = useState(false)
+  const [uploadModalFile, setUploadModalFile] = useState(null)
+  const [uploadModalRemarks, setUploadModalRemarks] = useState('')
+  const [uploadModalLoading, setUploadModalLoading] = useState(false)
+  const [uploadModalError, setUploadModalError] = useState('')
+  const [uploadModalSuccess, setUploadModalSuccess] = useState('')
+
+  const [loading, setLoading] = useState(false)
+  const [loadingTitle, setLoadingTitle] = useState('')
+  const [loadingDescription, setLoadingDescription] = useState('')
+
+  const handleOpenUploadModal = (row) => {
+    setSelectedUploadItem(row)
+    setUploadModalFile(null)
+    setUploadModalRemarks('')
+    setUploadModalError('')
+    setUploadModalSuccess('')
+    setUploadModalOpen(true)
+  }
+
+  const handleSaveUploadModal = async () => {
+    if (!selectedUploadItem || !claimId) return
+
+    if (!uploadModalFile) {
+      setUploadModalError('Please select a PDF file to upload.')
+      return
+    }
+
+    const itemId =
+      selectedUploadItem.checklistItemId ||
+      selectedUploadItem.itemNo ||
+      selectedUploadItem.id
+
+    try {
+      setUploadModalLoading(true)
+      setUploadModalError('')
+      setUploadModalSuccess('')
+
+      await uploadChecklistDocument(
+        claimId,
+        String(itemId),
+        uploadModalFile,
+        selectedUploadItem.documentType || selectedUploadItem.groupCode || '',
+        selectedUploadItem.checklistItem || selectedUploadItem.displayName || '',
+        uploadModalRemarks.trim() || 'Uploaded supplemental document',
+      )
+
+      setChecklistStatusOverrides((prev) => ({
+        ...prev,
+        [selectedUploadItem.itemNo]: 'AVAILABLE',
+      }))
+
+      setUploadModalSuccess('Document uploaded successfully!')
+
+      try {
+        await getClaimPacketChecklistReview(claimId)
+      } catch {
+        // Fallback
+      }
+
+      setTimeout(() => {
+        setUploadModalOpen(false)
+      }, 1000)
+    } catch (err) {
+      setUploadModalError(
+        err instanceof Error ? err.message : 'Unable to upload document.',
+      )
+    } finally {
+      setUploadModalLoading(false)
+    }
+  }
 
   const packet = packetResult?.result || null
   const validation = validationResult?.result || null
   const claimId = packet?.claimId || ''
   const claimReview = groupReviewResult?.result || null
   const reviewResult = claimReview
+
+  const handleOpenChecklistModal = async (item) => {
+    if (!claimId) return
+
+    try {
+      setChecklistActionLoading(true)
+      setChecklistActionError('')
+
+      let fetchedDetail = null
+      try {
+        const detailPayload = await getClaimPacketChecklistItemDetail(
+          claimId,
+          item.itemNo || item.checklistItemId || item.id,
+        )
+        fetchedDetail = detailPayload?.result || null
+      } catch {
+        // Fallback to item
+      }
+
+      const activeItem = fetchedDetail || item
+      setSelectedChecklistItem(activeItem)
+      setChecklistDecisionOption('')
+      setChecklistRemarks('')
+      setChecklistActionError('')
+      setChecklistActionSuccess('')
+      setChecklistActionModalOpen(true)
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Unable to fetch item details.',
+      )
+    } finally {
+      setChecklistActionLoading(false)
+    }
+  }
+
+  const handleSelectDecisionOption = (option) => {
+    setChecklistDecisionOption(option)
+    setChecklistActionError('') // Clear error message when choosing another option
+  }
+
+  const handleTableDocumentUpload = async (row, file) => {
+    if (!claimId || !file) return
+
+    try {
+      setLoadingTitle('Uploading document')
+      setLoadingDescription(
+        `Uploading ${file.name} for ${row.checklistItem}...`,
+      )
+      setLoading(true)
+      setError('')
+
+      const itemId = row.checklistItemId || row.itemNo || row.id
+
+      await uploadChecklistDocument(
+        claimId,
+        String(itemId),
+        file,
+        row.documentType || row.groupCode || '',
+        row.checklistItem || row.displayName || '',
+        'Uploaded supplemental document from validation table',
+      )
+
+      setChecklistStatusOverrides((prev) => ({
+        ...prev,
+        [row.itemNo]: 'AVAILABLE',
+      }))
+
+      // Sync latest checklist review document from backend
+      try {
+        await getClaimPacketChecklistReview(claimId)
+      } catch {
+        // Fallback
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Unable to upload document.',
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveChecklistAction = async () => {
+    if (!selectedChecklistItem || !claimId) return
+
+    if (!checklistDecisionOption) {
+      setChecklistActionError(
+        'Please choose an option (Ignore, Not applicable, or Required) before saving.',
+      )
+      return
+    }
+
+    const itemId =
+      selectedChecklistItem.checklistItemId ||
+      selectedChecklistItem.itemNo ||
+      selectedChecklistItem.id
+
+    try {
+      setChecklistActionLoading(true)
+      setChecklistActionError('')
+      setChecklistActionSuccess('')
+
+      let decision = 'REQUIRED'
+      let remarks = checklistRemarks.trim()
+
+      if (checklistDecisionOption === 'IGNORE') {
+        decision = 'OPTIONAL'
+        if (!remarks) remarks = 'Ignored by reviewer'
+      } else if (checklistDecisionOption === 'NOT_APPLICABLE') {
+        decision = 'NOT_APPLICABLE'
+        if (!remarks) remarks = 'Not applicable'
+      } else if (checklistDecisionOption === 'REQUIRED') {
+        decision = 'REQUIRED'
+        if (!remarks) remarks = 'Marked as required document'
+      }
+
+      const payload = {
+        reviewerDecision: decision,
+        reviewerRemarks: remarks,
+      }
+
+      await updateChecklistItemDecision(claimId, String(itemId), payload)
+
+      const statusMap = {
+        IGNORE: 'OPTIONAL',
+        NOT_APPLICABLE: 'NOT_APPLICABLE',
+        REQUIRED: 'REQUIRED',
+      }
+
+      const newStatus = statusMap[checklistDecisionOption] || 'REQUIRED'
+
+      setChecklistStatusOverrides((prev) => ({
+        ...prev,
+        [selectedChecklistItem.itemNo]: newStatus,
+      }))
+
+      setChecklistActionSuccess('Status updated successfully!')
+
+      // Sync latest checklist review document from backend
+      try {
+        await getClaimPacketChecklistReview(claimId)
+      } catch {
+        // Fallback to local status overrides
+      }
+
+      setTimeout(() => {
+        setChecklistActionModalOpen(false)
+      }, 1000)
+    } catch (err) {
+      setChecklistActionError(
+        err instanceof Error ? err.message : 'Unable to save checklist action.',
+      )
+    } finally {
+      setChecklistActionLoading(false)
+    }
+  }
 
   const handleOpenPreview = useCallback((url) => {
     if (!url) {
@@ -104,7 +348,7 @@ export default function ClaimValidationsPage() {
 
   const processClaim = async () => {
     if (!selectedFile) {
-      setError('Please select a PDF claim packet.')
+      setError('Please select a customer claim packet PDF file before processing.')
       return
     }
 
@@ -160,19 +404,36 @@ export default function ClaimValidationsPage() {
   const checklistStatus = packet?.checklistStatus || []
   const checklistValidation = validation?.checklistValidation || []
   const reviewRequiredPages = validation?.reviewRequiredPages || packet?.reviewRequiredPages || []
-  const groups = useMemo(() => reviewResult?.groups ?? groupedDocuments, [reviewResult, groupedDocuments])
-  const reviewGroups = reviewResult?.groups ?? groupedDocuments
+  const displayGroups = useMemo(() => {
+    if (reviewedListResult?.result?.groups && reviewedListResult.result.groups.length > 0) {
+      return reviewedListResult.result.groups
+    }
+    if (reviewResult?.groups && reviewResult.groups.length > 0) {
+      return reviewResult.groups
+    }
+    return groupedDocuments
+  }, [reviewedListResult, reviewResult, groupedDocuments])
+  const groups = displayGroups
+  const reviewGroups = displayGroups
   const groupedDocumentRows = useMemo(
     () =>
-      groupedDocuments.map((doc, index) => ({
-        ...doc,
-        id: doc.groupId || `${doc.groupCode || doc.displayName || 'group'}-${index}`,
-        previewUrl:
-          claimId && doc.groupId
+      displayGroups.map((doc, index) => {
+        const pNums = doc.pageNumbers || doc.sourcePages || []
+        const rawPreviewUrl = doc.previewUrl || ''
+        const previewUrl =
+          rawPreviewUrl ||
+          (claimId && doc.groupId
             ? `/api/claim-packets/${encodeURIComponent(claimId)}/groups/${encodeURIComponent(doc.groupId)}/preview`
-            : '',
-      })),
-    [claimId, groupedDocuments],
+            : '')
+
+        return {
+          ...doc,
+          id: doc.groupId || `${doc.groupCode || doc.displayName || 'group'}-${index}`,
+          pageNumbers: pNums,
+          previewUrl: previewUrl,
+        }
+      }),
+    [displayGroups, claimId],
   )
   const reviewRequiredRows = useMemo(
     () =>
@@ -274,32 +535,41 @@ export default function ClaimValidationsPage() {
       ? groups.find((group) => group.groupId === selectedGroupId)
       : null
 
-    if (!selectedGroup?.groupId) {
+    if (!claimId || !selectedGroup?.groupId) {
       setSelectedGroupPreviewUrl('')
       return undefined
     }
 
     const fallbackUrl = buildGroupPreviewUrl(selectedGroup.groupId, false)
-    const reviewedPreviewUrl = buildReviewedGroupPreviewUrl(selectedGroup.groupId)
     let cancelled = false
 
-    const probeReviewedPreview = async () => {
+    const fetchReviewedListData = async () => {
       try {
-        const response = await fetch(buildApiUrl(reviewedPreviewUrl), {
-          method: 'GET',
-          headers: {
-            Accept: 'application/pdf',
-          },
-        })
+        const payload = await getClaimPacketReviewedList(claimId)
+        if (cancelled) return
 
-        const blob = await response.blob()
+        const reviewedGroups = payload?.result?.groups || []
+        const matchedGroup =
+          reviewedGroups.find((g) => g.groupId === selectedGroup.groupId) ||
+          reviewedGroups.find((g) => g.documentType === selectedGroup.documentType) ||
+          reviewedGroups.find((g) => g.displayName === selectedGroup.displayName)
 
-        if (!response.ok || blob.size === 0) {
-          throw new Error('Empty reviewed preview response')
-        }
+        if (matchedGroup) {
+          if (matchedGroup.previewUrl) {
+            setSelectedGroupPreviewUrl(matchedGroup.previewUrl)
+          } else {
+            setSelectedGroupPreviewUrl(buildReviewedGroupPreviewUrl(selectedGroup.groupId))
+          }
 
-        if (!cancelled) {
-          setSelectedGroupPreviewUrl(reviewedPreviewUrl)
+          const pageNumbers = matchedGroup.pageNumbers || matchedGroup.sourcePages || []
+          if (pageNumbers.length > 0) {
+            setGroupPageAssignments((prevAssignments) => ({
+              ...(prevAssignments || {}),
+              [selectedGroup.groupId]: pageNumbers,
+            }))
+          }
+        } else {
+          setSelectedGroupPreviewUrl(fallbackUrl)
         }
       } catch {
         if (!cancelled) {
@@ -308,12 +578,12 @@ export default function ClaimValidationsPage() {
       }
     }
 
-    probeReviewedPreview()
+    fetchReviewedListData()
 
     return () => {
       cancelled = true
     }
-  }, [buildGroupPreviewUrl, buildReviewedGroupPreviewUrl, groups, selectedGroupId])
+  }, [claimId, selectedGroupId, groups, buildGroupPreviewUrl, buildReviewedGroupPreviewUrl])
 
   const togglePageForAssignment = (pageNumber) => {
     setPagesToAssign((pages) => (
@@ -438,6 +708,7 @@ export default function ClaimValidationsPage() {
     try {
       setGroupReviewLoading(true)
       setError('')
+      setSaveSuccessMessage('')
 
       const result = await getClaimPacketReview(claimId)
       const loadedGroups = result?.result?.groups ?? []
@@ -446,9 +717,37 @@ export default function ClaimValidationsPage() {
       setSourceGroupId('')
       setPagesToAssign([])
       setSelectedGroupPreviewUrl('')
-      setGroupPageAssignments(
-        Object.fromEntries(loadedGroups.map((group) => [group.groupId, [...(group.sourcePages || [])]])),
+
+      let initialAssignments = Object.fromEntries(
+        loadedGroups.map((group) => [group.groupId, [...(group.sourcePages || [])]]),
       )
+
+      try {
+        const reviewedListPayload = await getClaimPacketReviewedList(claimId)
+        setReviewedListResult(reviewedListPayload)
+        const reviewedGroups = reviewedListPayload?.result?.groups ?? []
+
+        if (reviewedGroups.length > 0) {
+          for (const rg of reviewedGroups) {
+            const match =
+              loadedGroups.find((g) => g.groupId === rg.groupId) ||
+              loadedGroups.find((g) => g.documentType === rg.documentType) ||
+              loadedGroups.find((g) => g.displayName === rg.displayName)
+
+            const targetGroupId = match?.groupId || rg.groupId
+            if (targetGroupId) {
+              const pNums = rg.pageNumbers || rg.sourcePages || []
+              if (pNums.length > 0) {
+                initialAssignments[targetGroupId] = pNums
+              }
+            }
+          }
+        }
+      } catch {
+        // Fallback to baseline groups if reviewedlist is not available yet
+      }
+
+      setGroupPageAssignments(initialAssignments)
       setAvailablePageNumbers(
         (result?.result?.unassignedPages ?? [])
           .map((page) => page.pageNumber ?? page.sourcePageNumber)
@@ -478,6 +777,7 @@ export default function ClaimValidationsPage() {
     try {
       setGroupReviewLoading(true)
       setError('')
+      setSaveSuccessMessage('')
 
       const originalUnassignedPageNumbers = new Set(
         (reviewResult?.unassignedPages ?? [])
@@ -516,7 +816,15 @@ export default function ClaimValidationsPage() {
 
       const result = await saveClaimPacketReview(claimId, payload)
       setGroupReviewResult(result)
-      setGroupModalOpen(false)
+
+      try {
+        const reviewedListPayload = await getClaimPacketReviewedList(claimId)
+        setReviewedListResult(reviewedListPayload)
+      } catch {
+        // Fallback to saved result
+      }
+
+      setSaveSuccessMessage('Review saved successfully!')
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : 'Unable to save review.',
@@ -537,14 +845,22 @@ export default function ClaimValidationsPage() {
   return (
     <main className="claim-validations-shell">
       <LoadingOverlay
-        isVisible={processing || validating}
-        title={processing ? 'Processing claim packet' : 'Running claim validation'}
+        isVisible={processing || validating || loading}
+        title={
+          processing
+            ? 'Processing claim packet'
+            : validating
+              ? 'Running claim validation'
+              : loadingTitle || 'Please wait'
+        }
         description={
           processing
             ? 'Uploading the PDF, classifying pages, and building the claim packet.'
-            : 'Checking the generated packet against the dispatch checklist.'
+            : validating
+              ? 'Checking the generated packet against the dispatch checklist.'
+              : loadingDescription || 'Processing request...'
         }
-        scope="container"
+        scope="viewport"
       />
 
       <section className="claim-hero panel">
@@ -566,10 +882,25 @@ export default function ClaimValidationsPage() {
           </div>
 
           <div className="claim-actions">
-            <button type="button" className="primary-button" onClick={processClaim} disabled={!selectedFile || processing}>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={processClaim}
+              disabled={processing}
+            >
               {processing ? 'Processing Claim...' : 'Process Claim'}
             </button>
-            <button type="button" className="secondary-button" onClick={validateClaim} disabled={!packet || validating}>
+            <button
+              type="button"
+              className={`secondary-button ${packet ? 'claim-validation-active-btn' : ''}`}
+              onClick={validateClaim}
+              disabled={!packet || processing || validating}
+              title={
+                !packet
+                  ? 'Complete Claim Process first to enable Validation Check'
+                  : 'Run checklist validation on processed claim packet'
+              }
+            >
               {validating ? 'Running Validation...' : 'Validation Check'}
             </button>
           </div>
@@ -668,22 +999,6 @@ export default function ClaimValidationsPage() {
             </table>
           </div>
 
-          {checklistStatus.length ? (
-            <div className="claim-mini-section">
-              <h4>Packet checklist snapshot</h4>
-              <div className="claim-checklist-grid">
-                {checklistStatus.map((item) => (
-                  <article key={item.itemNo} className="claim-checklist-card">
-                    <div>
-                      <strong>{item.itemNo}</strong>
-                      <span>{item.checklistItem}</span>
-                    </div>
-                    <StatusBadge value={item.status} />
-                  </article>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </section>
       ) : null}
 
@@ -725,21 +1040,58 @@ export default function ClaimValidationsPage() {
                   <th>Status</th>
                   <th>Matched Files</th>
                   <th>Remarks</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {checklistValidation.map((row) => (
-                  <tr key={row.itemNo}>
-                    <td>{row.itemNo}</td>
-                    <td>{row.checklistItem}</td>
-                    <td>{row.required ? 'Yes' : 'No'}</td>
-                    <td>
-                      <StatusBadge value={row.status} />
-                    </td>
-                    <td>{row.matchedFiles?.join(', ') || '—'}</td>
-                    <td>{row.remarks || '—'}</td>
-                  </tr>
-                ))}
+                {checklistValidation.map((row) => {
+                  const currentStatus = checklistStatusOverrides[row.itemNo] || row.status
+                  const normStatus = String(currentStatus || '').toUpperCase()
+                  const showActionIcon = normStatus !== 'AVAILABLE'
+                  const isRequired = normStatus === 'REQUIRED' || normStatus === 'REQUIRED_DOCUMENT_NEEDED'
+
+                  return (
+                    <tr key={row.itemNo}>
+                      <td>{row.itemNo}</td>
+                      <td>{row.checklistItem}</td>
+                      <td>{row.required ? 'Yes' : 'No'}</td>
+                      <td>
+                        <StatusBadge value={currentStatus} />
+                      </td>
+                      <td>{row.matchedFiles?.join(', ') || '—'}</td>
+                      <td>{row.remarks || '—'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                          {showActionIcon ? (
+                            <button
+                              type="button"
+                              className="claim-checklist-card__action-btn"
+                              onClick={() => handleOpenChecklistModal(row)}
+                              title="Edit checklist item status"
+                              aria-label={`Action for ${row.checklistItem}`}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20h9"/>
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                              </svg>
+                            </button>
+                          ) : null}
+
+                          {isRequired ? (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => handleOpenUploadModal(row)}
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              📤 Upload
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -919,13 +1271,204 @@ export default function ClaimValidationsPage() {
                       </div>
                     </>}
                     <div className={`claim-group-review__footer ${canEditArrangement ? '' : 'claim-group-review__footer--hidden'}`}>
+                      {saveSuccessMessage ? (
+                        <span className="claim-save-success-msg" style={{ color: '#059669', fontWeight: 600, marginRight: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          ✓ {saveSuccessMessage}
+                        </span>
+                      ) : null}
                       <button type="button" className="primary-button" onClick={handleSaveReview} disabled={groupReviewLoading}>
-                        Save
+                        {groupReviewLoading ? 'Saving...' : 'Save'}
                       </button>
                     </div>
 
               </div>
             ) : <p className="claim-packet-empty">No document groups were returned for this claim.</p>}
+          </section>
+        </div>
+      ) : null}
+
+      {isChecklistActionModalOpen && selectedChecklistItem ? (
+        <div className="claim-small-modal" role="dialog" aria-modal="true" aria-label="Update checklist item">
+          <div className="claim-small-modal__backdrop" onClick={() => setChecklistActionModalOpen(false)} />
+          <section className="claim-small-modal__content">
+            <header className="claim-small-modal__header">
+              <div>
+                <span className="eyebrow">Checklist Item #{selectedChecklistItem.itemNo}</span>
+                <h3>{selectedChecklistItem.checklistItem}</h3>
+              </div>
+              <button
+                type="button"
+                className="claim-small-modal__close"
+                onClick={() => setChecklistActionModalOpen(false)}
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </header>
+
+            <div className="claim-small-modal__body">
+              <div className="claim-small-modal__status-row">
+                <span>Current Status:</span>
+                <StatusBadge value={checklistStatusOverrides[selectedChecklistItem.itemNo] || selectedChecklistItem.status} />
+              </div>
+
+              <div className="claim-small-modal__form">
+                <div className="claim-small-modal__field">
+                  <label>Select Status / Action</label>
+                  <div className="claim-small-modal__radio-group">
+                    <label className="claim-small-modal__radio-label">
+                      <input
+                        type="radio"
+                        name="checklistDecision"
+                        value="IGNORE"
+                        checked={checklistDecisionOption === 'IGNORE'}
+                        onChange={() => handleSelectDecisionOption('IGNORE')}
+                      />
+                      <span>Ignore</span>
+                    </label>
+
+                    <label className="claim-small-modal__radio-label">
+                      <input
+                        type="radio"
+                        name="checklistDecision"
+                        value="NOT_APPLICABLE"
+                        checked={checklistDecisionOption === 'NOT_APPLICABLE'}
+                        onChange={() => handleSelectDecisionOption('NOT_APPLICABLE')}
+                      />
+                      <span>Not applicable</span>
+                    </label>
+
+                    <label className="claim-small-modal__radio-label">
+                      <input
+                        type="radio"
+                        name="checklistDecision"
+                        value="REQUIRED"
+                        checked={checklistDecisionOption === 'REQUIRED'}
+                        onChange={() => handleSelectDecisionOption('REQUIRED')}
+                      />
+                      <span>Required</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="claim-small-modal__field">
+                  <label>Remarks / Notes</label>
+                  <input
+                    type="text"
+                    placeholder="Add remarks or notes..."
+                    value={checklistRemarks}
+                    onChange={(e) => setChecklistRemarks(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {checklistActionError ? (
+                <p className="claim-small-modal__error">{checklistActionError}</p>
+              ) : null}
+
+              {checklistActionSuccess ? (
+                <p className="claim-small-modal__success">✓ {checklistActionSuccess}</p>
+              ) : null}
+            </div>
+
+            <footer className="claim-small-modal__footer">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setChecklistActionModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleSaveChecklistAction}
+                disabled={checklistActionLoading}
+              >
+                {checklistActionLoading ? 'Saving...' : '💾 Save'}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {isUploadModalOpen && selectedUploadItem ? (
+        <div className="claim-small-modal" role="dialog" aria-modal="true" aria-label="Upload document">
+          <div className="claim-small-modal__backdrop" onClick={() => setUploadModalOpen(false)} />
+          <section className="claim-small-modal__content">
+            <header className="claim-small-modal__header">
+              <div>
+                <span className="eyebrow">Upload Document for Item #{selectedUploadItem.itemNo}</span>
+                <h3>{selectedUploadItem.checklistItem}</h3>
+              </div>
+              <button
+                type="button"
+                className="claim-small-modal__close"
+                onClick={() => setUploadModalOpen(false)}
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </header>
+
+            <div className="claim-small-modal__body">
+              <div className="claim-small-modal__status-row">
+                <span>Current Status:</span>
+                <StatusBadge value={checklistStatusOverrides[selectedUploadItem.itemNo] || selectedUploadItem.status} />
+              </div>
+
+              <div className="claim-small-modal__form">
+                <div className="claim-small-modal__field">
+                  <label>
+                    Upload Document (PDF) <span style={{ color: '#e11d48' }}>*</span>
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={(e) => {
+                      setUploadModalFile(e.target.files?.[0] || null)
+                      setUploadModalError('')
+                    }}
+                  />
+                </div>
+
+                <div className="claim-small-modal__field">
+                  <label>Remarks / Notes</label>
+                  <input
+                    type="text"
+                    placeholder="Add remarks or notes..."
+                    value={uploadModalRemarks}
+                    onChange={(e) => setUploadModalRemarks(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {uploadModalError ? (
+                <p className="claim-small-modal__error">{uploadModalError}</p>
+              ) : null}
+
+              {uploadModalSuccess ? (
+                <p className="claim-small-modal__success">✓ {uploadModalSuccess}</p>
+              ) : null}
+            </div>
+
+            <footer className="claim-small-modal__footer">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setUploadModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleSaveUploadModal}
+                disabled={uploadModalLoading}
+              >
+                {uploadModalLoading ? 'Saving...' : '💾 Save'}
+              </button>
+            </footer>
           </section>
         </div>
       ) : null}

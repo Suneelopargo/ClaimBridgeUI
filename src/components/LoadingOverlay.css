@@ -1,14 +1,14 @@
 .common-loader {
   display: grid;
   place-items: center;
-  background: rgba(241, 245, 249, 0.88);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
 }
 
 .common-loader--viewport {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 99999;
 }
 
 .common-loader--container {
