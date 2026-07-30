@@ -17,6 +17,7 @@ import { API_BASE_URL, buildApiUrl } from './config/api'
 import Footer from './components/Footer'
 import LoadingOverlay from './components/LoadingOverlay'
 import ClaimValidationsPage from './components/ClaimValidationsPage'
+import ClaimPacketProcessingPage from './components/ClaimPacketProcessingPage'
 import ReconciliationRecordsPage from './components/ReconciliationRecordsPage'
 import { authenticateLogin } from './services/authApi'
 import { createActivityLog, fetchActivityLogs } from './services/activityLogApi'
@@ -45,6 +46,7 @@ const REFRESH_OPTIONS = [0, 30, 60, 300]
 
 const WORKSPACE_TABS = [
   { id: 'dashboard', label: 'Claims Dashboard' },
+  { id: 'claim-packet-processing', label: 'Claim Packet Processing' },
   { id: 'ihx-sync', label: 'IHX Ingestion' },
   { id: 'claim-validations', label: 'Claim Validations' },
   { id: 'reconciliation', label: 'Reconciliation Grid' },
@@ -1246,7 +1248,7 @@ function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
 
   const visibleTabs = useMemo(
     () => WORKSPACE_TABS.filter((tab) => {
-      if (tab.id === 'ihx-sync' || tab.id === 'activity-log') {
+      if (tab.id === 'ihx-sync' || tab.id === 'activity-log' || tab.id === 'claim-packet-processing') {
         return isSuperuser
       }
 
@@ -1342,6 +1344,12 @@ function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
       <section className={`workspace-view ${activeTab === 'dashboard' ? 'workspace-view--active' : ''}`}>
         <DashboardPage onLogout={onLogout} isActive={activeTab === 'dashboard'} />
       </section>
+
+      {isSuperuser ? (
+        <section className={`workspace-view ${activeTab === 'claim-packet-processing' ? 'workspace-view--active' : ''}`}>
+          <ClaimPacketProcessingPage />
+        </section>
+      ) : null}
 
       {isSuperuser ? (
         <section className={`workspace-view ${activeTab === 'ihx-sync' ? 'workspace-view--active' : ''}`}>
