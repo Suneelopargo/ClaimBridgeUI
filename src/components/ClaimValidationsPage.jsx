@@ -74,7 +74,7 @@ function PdfFileLinkCell(params) {
   )
 }
 
-export default function ClaimValidationsPage() {
+export default function ClaimValidationsPage({ isActive = true }) {
   const [selectedFile, setSelectedFile] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -114,6 +114,9 @@ export default function ClaimValidationsPage() {
   const [loading, setLoading] = useState(false)
   const [loadingTitle, setLoadingTitle] = useState('')
   const [loadingDescription, setLoadingDescription] = useState('')
+  const [reportAvailable, setReportAvailable] = useState(false)
+  const [reportChecking, setReportChecking] = useState(false)
+  const [reportCheckError, setReportCheckError] = useState('')
 
   const handleOpenUploadModal = (row) => {
     setSelectedUploadItem(row)
@@ -389,6 +392,92 @@ export default function ClaimValidationsPage() {
       )
     } finally {
       setValidating(false)
+    }
+  }
+
+  // Check availability of portfolio excel report when the page becomes active
+  useEffect(() => {
+    if (!isActive) return undefined
+
+    let cancelled = false
+
+    const checkReport = async () => {
+      setReportChecking(true)
+      setReportCheckError('')
+
+      const url = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/download')
+
+      try {
+        // Use GET (server does not allow HEAD) and include credentials if backend uses session cookies
+        const getResp = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Accept: '*/*',
+          },
+          credentials: 'include',
+        })
+
+        if (!cancelled) {
+          setReportAvailable(getResp.ok)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setReportAvailable(false)
+          setReportCheckError('Unable to check report availability. Please try again later.')
+        }
+      } finally {
+        if (!cancelled) setReportChecking(false)
+      }
+    }
+
+    checkReport()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isActive])
+
+  const handleDownloadReport = async () => {
+    const url = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/download')
+
+    try {
+      setLoading(true)
+      setLoadingTitle('Downloading report')
+      setLoadingDescription('Preparing the portfolio Excel report for download...')
+
+      const resp = await fetch(url, { method: 'GET', credentials: 'include' })
+
+      if (!resp.ok) {
+        throw new Error(`Report download failed: ${resp.status}`)
+      }
+
+      const blob = await resp.blob()
+      const contentDisposition = resp.headers.get('content-disposition') || ''
+      let filename = 'HCG_Claim_Validation_Report.xlsx'
+
+      const match = /filename\*=UTF-8''([^;\n\r]*)/.exec(contentDisposition) || /filename="?([^";]+)"?/.exec(contentDisposition)
+      if (match && match[1]) {
+        try {
+          filename = decodeURIComponent(match[1])
+        } catch {
+          filename = match[1]
+        }
+      }
+
+      const urlObj = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = urlObj
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(urlObj)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to download report.')
+    } finally {
+      setLoading(false)
+      setLoadingTitle('')
+      setLoadingDescription('')
     }
   }
 
@@ -903,6 +992,20 @@ export default function ClaimValidationsPage() {
             >
               {validating ? 'Running Validation...' : 'Validation Check'}
             </button>
+            <button
+              type="button"
+               className="primary-button"
+              onClick={handleDownloadReport}
+              disabled={!reportAvailable || reportChecking || loading}
+              title={
+                !reportAvailable
+                  ? 'Report not available yet — run the Validation Check to generate it'
+                  : 'Download portfolio Excel report'
+              }
+              style={{ marginLeft: '12px' }}
+            >
+              {loading && loadingTitle === 'Downloading report' ? 'Downloading...' : 'Download Report'}
+            </button>
           </div>
         </div>
 
@@ -1010,7 +1113,31 @@ export default function ClaimValidationsPage() {
               <p>Checklist readiness for the processed claim packet.</p>
             </div>
 
-            <StatusBadge value={validation.summary?.overallStatus} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                <StatusBadge value={validation.summary?.overallStatus} />
+
+                <div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleDownloadReport}
+                    disabled={!reportAvailable || reportChecking || loading}
+                    title={
+                      !reportAvailable
+                        ? 'Report not available yet — run Validation Check to generate it'
+                        : 'Download portfolio Excel report'
+                    }
+                  >
+                    {loading && loadingTitle === 'Downloading report' ? 'Downloading...' : 'Download Report'}
+                  </button>
+                </div>
+
+                {!reportAvailable && !reportChecking ? (
+                  <small className="claim-info">Report not generated yet — run the Validation Check to generate it.</small>
+                ) : null}
+
+                {reportChecking ? <small className="claim-info">Checking report availability...</small> : null}
+              </div>
           </div>
 
           <div className="claim-metrics-grid claim-metrics-grid--six">

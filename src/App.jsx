@@ -1357,7 +1357,7 @@ function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
       ) : null}
 
       <section className={`workspace-view ${activeTab === 'claim-validations' ? 'workspace-view--active' : ''}`}>
-        <ClaimValidationsPage />
+        <ClaimValidationsPage isActive={activeTab === 'claim-validations'} />
       </section>
 
       <section className={`workspace-view ${activeTab === 'reconciliation' ? 'workspace-view--active' : ''}`}>
