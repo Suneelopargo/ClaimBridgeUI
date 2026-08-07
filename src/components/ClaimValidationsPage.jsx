@@ -405,20 +405,27 @@ export default function ClaimValidationsPage({ isActive = true }) {
       setReportChecking(true)
       setReportCheckError('')
 
-      const url = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/download')
+      const url = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/availability')
 
       try {
-        // Use GET (server does not allow HEAD) and include credentials if backend uses session cookies
+        // Availability endpoint avoids downloading the full file during status checks.
         const getResp = await fetch(url, {
           method: 'GET',
           headers: {
-            Accept: '*/*',
+            Accept: 'application/json',
           },
           credentials: 'include',
+          cache: 'no-store',
         })
 
+        if (!getResp.ok) {
+          throw new Error(`Report availability check failed: ${getResp.status}`)
+        }
+
+        const payload = await getResp.json()
+
         if (!cancelled) {
-          setReportAvailable(getResp.ok)
+          setReportAvailable(Boolean(payload?.result?.available))
         }
       } catch (err) {
         if (!cancelled) {
@@ -459,9 +466,13 @@ export default function ClaimValidationsPage({ isActive = true }) {
         throw new Error(`Report generation failed: ${genResp.status}`)
       }
 
-      // Optionally we could inspect the generation response for paths/names
-      // Now call the existing download endpoint to fetch the generated file
-      const resp = await fetch(downloadUrl, { method: 'GET', credentials: 'include' })
+      // Fetch with cache busting to guarantee we receive the latest generated report file.
+      const freshDownloadUrl = `${downloadUrl}?force_refresh=true&t=${Date.now()}`
+      const resp = await fetch(freshDownloadUrl, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+      })
 
       if (!resp.ok) {
         throw new Error(`Report download failed: ${resp.status}`)
