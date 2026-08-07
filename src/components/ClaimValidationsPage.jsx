@@ -438,14 +438,30 @@ export default function ClaimValidationsPage({ isActive = true }) {
   }, [isActive])
 
   const handleDownloadReport = async () => {
-    const url = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/download')
+    const downloadUrl = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/download')
+    const generateUrl = buildApiUrl('/api/claim-packets/document-reports/portfolio/generate')
 
     try {
       setLoading(true)
-      setLoadingTitle('Downloading report')
-      setLoadingDescription('Preparing the portfolio Excel report for download...')
+      setLoadingTitle('Preparing report')
+      setLoadingDescription('Generating the portfolio report, then downloading...')
 
-      const resp = await fetch(url, { method: 'GET', credentials: 'include' })
+      // First request: trigger generation of the complete portfolio report
+      const genResp = await fetch(generateUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
+
+      if (!genResp.ok) {
+        throw new Error(`Report generation failed: ${genResp.status}`)
+      }
+
+      // Optionally we could inspect the generation response for paths/names
+      // Now call the existing download endpoint to fetch the generated file
+      const resp = await fetch(downloadUrl, { method: 'GET', credentials: 'include' })
 
       if (!resp.ok) {
         throw new Error(`Report download failed: ${resp.status}`)
