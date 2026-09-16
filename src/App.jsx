@@ -19,13 +19,24 @@ import LoadingOverlay from './components/LoadingOverlay'
 import ClaimValidationsPage from './components/ClaimValidationsPage'
 import ClaimPacketProcessingPage from './components/ClaimPacketProcessingPage'
 import ReconciliationRecordsPage from './components/ReconciliationRecordsPage'
-import { authenticateLogin } from './services/authApi'
+import AdministratorPage from './pages/AdministratorPage'
+import {
+  authenticateLogin,
+  extractRolesFromAuthPayload,
+  extractTokenFromAuthPayload,
+  extractUserFromAuthPayload,
+} from './services/authApi'
+import {
+  AUTH_ROLES_STORAGE_KEY,
+  AUTH_STORAGE_KEY,
+  AUTH_USER_STORAGE_KEY,
+  UNAUTHORIZED_EVENT,
+  apiFetch,
+  clearAllAuthData,
+  setAuthToken,
+} from './services/apiClient'
 import { createActivityLog, fetchActivityLogs } from './services/activityLogApi'
 import './App.css'
-
-const AUTH_STORAGE_KEY = 'claimbridge-admin-auth'
-const AUTH_ROLES_STORAGE_KEY = 'claimbridge-user-roles'
-const AUTH_USER_STORAGE_KEY = 'claimbridge-user-data'
 const ENABLE_IDLE_AUTO_LOGOUT = String(
   import.meta.env.VITE_ENABLE_IDLE_AUTO_LOGOUT ?? 'false',
 ).toLowerCase() === 'true'
@@ -46,6 +57,7 @@ const REFRESH_OPTIONS = [0, 30, 60, 300]
 
 const WORKSPACE_TABS = [
   { id: 'dashboard', label: 'Claims Dashboard' },
+  { id: 'administrator', label: 'Administration' },
   { id: 'ihx-sync', label: 'IHX Ingestion' },
   { id: 'claim-validations', label: 'Claim Validations' },
   { id: 'reconciliation', label: 'Reconciliation Grid' },
@@ -139,53 +151,12 @@ function getStoredUser() {
   }
 }
 
-function extractRolesFromAuthPayload(payload) {
-  const roleCandidates = [
-    payload?.roles,
-    payload?.data?.roles,
-    payload?.user?.roles,
-  ]
-
-  const roleList = roleCandidates.find((item) => Array.isArray(item))
-
-  if (Array.isArray(roleList)) {
-    return roleList
-      .map((role) => String(role || '').trim())
-      .filter((role) => role.length > 0)
-  }
-
-  const singleRoleCandidates = [
-    payload?.role,
-    payload?.data?.role,
-    payload?.user?.role,
-    payload?.roleDescription,
-    payload?.data?.roleDescription,
-    payload?.user?.roleDescription,
-  ]
-
-  const singleRole = singleRoleCandidates.find(
-    (item) => typeof item === 'string' && item.trim().length > 0,
-  )
-
-  return singleRole ? [singleRole.trim()] : []
-}
-
 function hasSuperuserRole(roles) {
   return roles.some((role) => role.toLowerCase() === 'superuser')
 }
 
 function clearClientStorage() {
-  try {
-    localStorage.clear()
-  } catch {
-    // Ignore storage failures in restricted contexts.
-  }
-
-  try {
-    sessionStorage.clear()
-  } catch {
-    // Ignore storage failures in restricted contexts.
-  }
+  clearAllAuthData()
 }
 
 function resolveUserName(userData) {
@@ -379,7 +350,7 @@ function DashboardPage({ onLogout, isActive = true }) {
     setError('')
 
     try {
-      const response = await fetch(DASHBOARD_SUMMARY_ENDPOINT)
+      const response = await apiFetch('/api/dashboard/claim-status-summary')
 
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`)
@@ -418,7 +389,7 @@ function DashboardPage({ onLogout, isActive = true }) {
       setError('')
 
       try {
-        const response = await fetch(DASHBOARD_SUMMARY_ENDPOINT)
+        const response = await apiFetch('/api/dashboard/claim-status-summary')
 
         if (!response.ok) {
           throw new Error(`Request failed with status ${response.status}`)
@@ -849,11 +820,8 @@ function IhxSyncPage() {
     setSyncError('')
 
     try {
-      const response = await fetch(syncPath, {
+      const response = await apiFetch(syncPath, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-        },
       })
 
       if (!response.ok) {
@@ -987,7 +955,6 @@ function ActivityLogPage({ isActive = false, currentRole }) {
 
       while (true) {
         const payload = await fetchActivityLogs({
-          role: currentRole,
           page: currentPage,
           pageSize: 200,
         })
@@ -1247,7 +1214,12 @@ function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
 
   const visibleTabs = useMemo(
     () => WORKSPACE_TABS.filter((tab) => {
-      if (tab.id === 'ihx-sync' || tab.id === 'activity-log' || tab.id === 'claim-packet-processing') {
+      if (
+        tab.id === 'administrator' ||
+        tab.id === 'ihx-sync' ||
+        tab.id === 'activity-log' ||
+        tab.id === 'claim-packet-processing'
+      ) {
         return isSuperuser
       }
 
@@ -1343,6 +1315,12 @@ function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
       <section className={`workspace-view ${activeTab === 'dashboard' ? 'workspace-view--active' : ''}`}>
         <DashboardPage onLogout={onLogout} isActive={activeTab === 'dashboard'} />
       </section>
+
+      {isSuperuser ? (
+        <section className={`workspace-view ${activeTab === 'administrator' ? 'workspace-view--active' : ''}`}>
+          <AdministratorPage />
+        </section>
+      ) : null}
 
       {isSuperuser ? (
         <section className={`workspace-view ${activeTab === 'claim-packet-processing' ? 'workspace-view--active' : ''}`}>
@@ -1472,10 +1450,25 @@ function App() {
     return `${minutes}:${paddedSeconds}`
   }, [idleCountdownSeconds])
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      executeLogout()
+    }
+
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
+    return () => {
+      window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
+    }
+  }, [executeLogout])
+
   const handleLogin = (payload) => {
     sessionStorage.setItem(AUTH_STORAGE_KEY, 'true')
+    const token = extractTokenFromAuthPayload(payload)
+    if (token) {
+      setAuthToken(token)
+    }
     const nextRoles = extractRolesFromAuthPayload(payload)
-    const nextUserData = payload?.user && typeof payload.user === 'object' ? payload.user : null
+    const nextUserData = extractUserFromAuthPayload(payload)
     sessionStorage.setItem(AUTH_ROLES_STORAGE_KEY, JSON.stringify(nextRoles))
     sessionStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(nextUserData))
     try {
@@ -1568,6 +1561,14 @@ function App() {
                   currentRole={currentRole}
                   username={currentUsername}
                 />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/administrator"
+            element={(
+              <ProtectedRoute isAuthenticated={isAuthenticated} onUnauthorized={executeLogout}>
+                {isSuperuser ? <AdministratorPage /> : <Navigate to="/dashboard" replace />}
               </ProtectedRoute>
             )}
           />

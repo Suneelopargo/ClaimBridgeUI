@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
 import { buildApiUrl } from '../config/api'
+import { apiFetch } from '../services/apiClient'
 import {
   getClaimPacketChecklistItemDetail,
   getClaimPacketChecklistReview,
@@ -405,16 +406,12 @@ export default function ClaimValidationsPage({ isActive = true }) {
       setReportChecking(true)
       setReportCheckError('')
 
-      const url = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/availability')
+      const url = '/api/claim-packets/document-reports/portfolio/excel/availability'
 
       try {
         // Availability endpoint avoids downloading the full file during status checks.
-        const getResp = await fetch(url, {
+        const getResp = await apiFetch(url, {
           method: 'GET',
-          headers: {
-            Accept: 'application/json',
-          },
-          credentials: 'include',
           cache: 'no-store',
         })
 
@@ -445,8 +442,8 @@ export default function ClaimValidationsPage({ isActive = true }) {
   }, [isActive])
 
   const handleDownloadReport = async () => {
-    const downloadUrl = buildApiUrl('/api/claim-packets/document-reports/portfolio/excel/download')
-    const generateUrl = buildApiUrl('/api/claim-packets/document-reports/portfolio/generate')
+    const downloadUrl = '/api/claim-packets/document-reports/portfolio/excel/download'
+    const generateUrl = '/api/claim-packets/document-reports/portfolio/generate'
 
     try {
       setLoading(true)
@@ -454,12 +451,8 @@ export default function ClaimValidationsPage({ isActive = true }) {
       setLoadingDescription('Generating the portfolio report, then downloading...')
 
       // First request: trigger generation of the complete portfolio report
-      const genResp = await fetch(generateUrl, {
+      const genResp = await apiFetch(generateUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
       })
 
       if (!genResp.ok) {
@@ -468,9 +461,8 @@ export default function ClaimValidationsPage({ isActive = true }) {
 
       // Fetch with cache busting to guarantee we receive the latest generated report file.
       const freshDownloadUrl = `${downloadUrl}?force_refresh=true&t=${Date.now()}`
-      const resp = await fetch(freshDownloadUrl, {
+      const resp = await apiFetch(freshDownloadUrl, {
         method: 'GET',
-        credentials: 'include',
         cache: 'no-store',
       })
 

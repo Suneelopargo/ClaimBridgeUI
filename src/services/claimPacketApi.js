@@ -1,4 +1,4 @@
-import { buildApiUrl } from '../config/api'
+import { apiFetch, extractErrorMessage } from './apiClient'
 
 const PROCESS_ENDPOINT = '/api/claim-packets/classify-and-segregate'
 const REVIEW_ENDPOINT = '/api/claim-packets'
@@ -12,26 +12,11 @@ async function readJsonPayload(response) {
   }
 }
 
-function getResponseErrorMessage(payload, fallbackMessage) {
-  const candidate =
-    payload?.error ||
-    payload?.detail ||
-    payload?.message ||
-    payload?.result?.error ||
-    payload?.result?.message
-
-  if (typeof candidate === 'string' && candidate.trim()) {
-    return candidate
-  }
-
-  return fallbackMessage
-}
-
 export async function processCustomerClaimPacket(file) {
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch(buildApiUrl(PROCESS_ENDPOINT), {
+  const response = await apiFetch(PROCESS_ENDPOINT, {
     method: 'POST',
     body: formData,
   })
@@ -40,7 +25,7 @@ export async function processCustomerClaimPacket(file) {
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Claim processing failed with status ${response.status}`),
+      extractErrorMessage(payload, `Claim processing failed with status ${response.status}`),
     )
   }
 
@@ -48,18 +33,15 @@ export async function processCustomerClaimPacket(file) {
 }
 
 export async function getClaimPacketReview(claimId) {
-  const response = await fetch(buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/review`), {
+  const response = await apiFetch(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/review`, {
     method: 'GET',
-    headers: {
-      Accept: 'application/json',
-    },
   })
 
   const payload = await readJsonPayload(response)
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Unable to load claim packet review: ${response.status}`),
+      extractErrorMessage(payload, `Unable to load claim packet review: ${response.status}`),
     )
   }
 
@@ -67,40 +49,32 @@ export async function getClaimPacketReview(claimId) {
 }
 
 export async function getClaimPacketReviewedList(claimId) {
-  const response = await fetch(buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/reviewedlist`), {
+  const response = await apiFetch(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/reviewedlist`, {
     method: 'GET',
-    headers: {
-      Accept: 'application/json',
-    },
   })
 
   const payload = await readJsonPayload(response)
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Unable to load claim packet reviewed list: ${response.status}`),
+      extractErrorMessage(payload, `Unable to load claim packet reviewed list: ${response.status}`),
     )
   }
 
   return payload
 }
 
-
 export async function saveClaimPacketReview(claimId, reviewPayload) {
-  const response = await fetch(buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/review`), {
+  const response = await apiFetch(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/review`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(reviewPayload),
+    body: reviewPayload,
   })
 
   const payload = await readJsonPayload(response)
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Unable to save claim packet review: ${response.status}`),
+      extractErrorMessage(payload, `Unable to save claim packet review: ${response.status}`),
     )
   }
 
@@ -108,22 +82,17 @@ export async function saveClaimPacketReview(claimId, reviewPayload) {
 }
 
 export async function validateCustomerDispatchChecklist(claimId) {
-  const validationUrl = buildApiUrl(
-    `${VALIDATE_ENDPOINT}?claim_id=${encodeURIComponent(claimId)}`,
-  )
+  const validationUrl = `${VALIDATE_ENDPOINT}?claim_id=${encodeURIComponent(claimId)}`
 
-  const response = await fetch(validationUrl, {
+  const response = await apiFetch(validationUrl, {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-    },
   })
 
   const payload = await readJsonPayload(response)
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Validation failed with status ${response.status}`),
+      extractErrorMessage(payload, `Validation failed with status ${response.status}`),
     )
   }
 
@@ -131,15 +100,11 @@ export async function validateCustomerDispatchChecklist(claimId) {
 }
 
 export async function updateChecklistItemDecision(claimId, checklistItemId, decisionData) {
-  const response = await fetch(
-    buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(checklistItemId)}`),
+  const response = await apiFetch(
+    `${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(checklistItemId)}`,
     {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(decisionData),
+      body: decisionData,
     },
   )
 
@@ -147,7 +112,7 @@ export async function updateChecklistItemDecision(claimId, checklistItemId, deci
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Unable to update checklist item: ${response.status}`),
+      extractErrorMessage(payload, `Unable to update checklist item: ${response.status}`),
     )
   }
 
@@ -168,10 +133,8 @@ export async function uploadChecklistDocument(
   if (displayName) formData.append('displayName', displayName)
   if (reviewerRemarks) formData.append('reviewerRemarks', reviewerRemarks)
 
-  const response = await fetch(
-    buildApiUrl(
-      `${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(checklistItemId)}/documents`,
-    ),
+  const response = await apiFetch(
+    `${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(checklistItemId)}/documents`,
     {
       method: 'POST',
       body: formData,
@@ -182,7 +145,7 @@ export async function uploadChecklistDocument(
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Unable to upload document: ${response.status}`),
+      extractErrorMessage(payload, `Unable to upload document: ${response.status}`),
     )
   }
 
@@ -190,21 +153,15 @@ export async function uploadChecklistDocument(
 }
 
 export async function getClaimPacketChecklistReview(claimId) {
-  const response = await fetch(
-    buildApiUrl(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-review`),
-    {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
-    },
-  )
+  const response = await apiFetch(`${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-review`, {
+    method: 'GET',
+  })
 
   const payload = await readJsonPayload(response)
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Unable to load checklist review document: ${response.status}`),
+      extractErrorMessage(payload, `Unable to load checklist review document: ${response.status}`),
     )
   }
 
@@ -212,15 +169,10 @@ export async function getClaimPacketChecklistReview(claimId) {
 }
 
 export async function getClaimPacketChecklistItemDetail(claimId, itemId) {
-  const response = await fetch(
-    buildApiUrl(
-      `${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(itemId)}`,
-    ),
+  const response = await apiFetch(
+    `${REVIEW_ENDPOINT}/${encodeURIComponent(claimId)}/checklist-items/${encodeURIComponent(itemId)}`,
     {
       method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
     },
   )
 
@@ -228,7 +180,7 @@ export async function getClaimPacketChecklistItemDetail(claimId, itemId) {
 
   if (!response.ok || payload?.success === false) {
     throw new Error(
-      getResponseErrorMessage(payload, `Unable to load checklist item detail: ${response.status}`),
+      extractErrorMessage(payload, `Unable to load checklist item detail: ${response.status}`),
     )
   }
 
