@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community'
 import * as XLSX from 'xlsx'
-import { API_BASE_URL, buildApiUrl } from '../config/api'
+import { API_BASE_URL } from '../config/api'
+import { apiFetch } from '../services/apiClient'
 import LoadingOverlay from './LoadingOverlay'
 import './ReconciliationRecordsPage.css'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
 
-const RECONCILIATION_ENDPOINT = buildApiUrl('/api/reconciliation/records')
-const RECONCILIATION_DOWNLOAD_ENDPOINT = buildApiUrl('/api/reconciliation/download')
-const RECONCILIATION_IMPORT_ENDPOINT = buildApiUrl('/api/reconciliation/import')
+const RECONCILIATION_ENDPOINT = '/api/reconciliation/records'
+const RECONCILIATION_DOWNLOAD_ENDPOINT = '/api/reconciliation/download'
+const RECONCILIATION_IMPORT_ENDPOINT = '/api/reconciliation/import'
 const BACKEND_TARGET_LABEL = API_BASE_URL || 'the current host /api path'
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const API_FETCH_PAGE_SIZE = 100
@@ -145,7 +146,7 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
           page_size: String(API_FETCH_PAGE_SIZE),
         })
 
-        const response = await fetch(`${RECONCILIATION_ENDPOINT}?${query.toString()}`)
+        const response = await apiFetch(`${RECONCILIATION_ENDPOINT}?${query.toString()}`)
 
         if (!response.ok) {
           throw new Error(`Request failed with status ${response.status}`)
@@ -285,7 +286,7 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
 
     try {
       setSyncMessage('Downloading latest reconciliation report from portal...')
-      const downloadResponse = await fetch(RECONCILIATION_DOWNLOAD_ENDPOINT, {
+      const downloadResponse = await apiFetch(RECONCILIATION_DOWNLOAD_ENDPOINT, {
         method: 'POST',
         headers: {
           Accept: '*/*',
@@ -299,11 +300,8 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
       await downloadResponse.blob()
 
       setSyncMessage('Importing downloaded report into reconciliation table...')
-      const importResponse = await fetch(RECONCILIATION_IMPORT_ENDPOINT, {
+      const importResponse = await apiFetch(RECONCILIATION_IMPORT_ENDPOINT, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-        },
       })
 
       if (!importResponse.ok) {

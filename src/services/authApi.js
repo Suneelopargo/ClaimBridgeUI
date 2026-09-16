@@ -1,34 +1,80 @@
-import { buildApiUrl } from '../config/api'
+import { apiFetchJson } from './apiClient'
 
 const LOGIN_ENDPOINT = '/api/auth/login'
 
 export const authenticateLogin = async ({ username, password }) => {
-  const response = await fetch(buildApiUrl(LOGIN_ENDPOINT), {
+  return await apiFetchJson(LOGIN_ENDPOINT, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({ username, password }),
+    body: { username, password },
+    skipAuthEvent: true,
   })
+}
 
-  let payload = {}
+export function extractTokenFromAuthPayload(payload) {
+  const tokenCandidates = [
+    payload?.access_token,
+    payload?.accessToken,
+    payload?.token,
+    payload?.jwtToken,
+    payload?.jwt,
+    payload?.data?.access_token,
+    payload?.data?.accessToken,
+    payload?.data?.token,
+    payload?.data?.jwt,
+    payload?.auth?.token,
+    payload?.auth?.access_token,
+  ]
 
-  try {
-    payload = await response.json()
-  } catch {
-    payload = {}
+  const foundToken = tokenCandidates.find(
+    (item) => typeof item === 'string' && item.trim().length > 0,
+  )
+
+  return foundToken ? foundToken.trim() : null
+}
+
+export function extractRolesFromAuthPayload(payload) {
+  const roleCandidates = [
+    payload?.roles,
+    payload?.data?.roles,
+    payload?.user?.roles,
+  ]
+
+  const roleList = roleCandidates.find((item) => Array.isArray(item))
+
+  if (Array.isArray(roleList)) {
+    return roleList
+      .map((role) => String(role || '').trim())
+      .filter((role) => role.length > 0)
   }
 
-  if (!response.ok) {
-    const detail = payload?.detail
+  const singleRoleCandidates = [
+    payload?.role,
+    payload?.data?.role,
+    payload?.user?.role,
+    payload?.roleDescription,
+    payload?.data?.roleDescription,
+    payload?.user?.roleDescription,
+  ]
 
-    if (typeof detail === 'string' && detail.trim()) {
-      throw new Error(detail)
-    }
+  const singleRole = singleRoleCandidates.find(
+    (item) => typeof item === 'string' && item.trim().length > 0,
+  )
 
-    throw new Error(`Login failed with status ${response.status}`)
+  return singleRole ? [singleRole.trim()] : []
+}
+
+export function extractUserFromAuthPayload(payload) {
+  if (payload?.user && typeof payload.user === 'object' && !Array.isArray(payload.user)) {
+    return payload.user
   }
 
-  return payload
+  if (payload?.data?.user && typeof payload.data.user === 'object' && !Array.isArray(payload.data.user)) {
+    return payload.data.user
+  }
+
+  if (payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    return payload.data
+  }
+
+  return null
 }
