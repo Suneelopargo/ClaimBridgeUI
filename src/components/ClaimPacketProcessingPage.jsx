@@ -9,6 +9,7 @@ import {
   saveClaimPacketReview,
 } from '../services/claimPacketApi'
 import LoadingOverlay from './LoadingOverlay'
+import { StatusBadge } from '../design-system'
 import './ClaimPacketProcessingPage.css'
 
 export default function ClaimPacketProcessingPage() {
@@ -460,17 +461,6 @@ export default function ClaimPacketProcessingPage() {
         scope="viewport"
       />
 
-      <section className="panel claim-packet-hero">
-        <div>
-          <span className="eyebrow">Claim Packet Processing</span>
-          <h2>Super‑admin packet review</h2>
-          <p>
-            Process the uploaded claim PDF, inspect baseline groups, preview pages and groups,
-            then save corrected group splits for final review.
-          </p>
-        </div>
-      </section>
-
       <section className="panel claim-packet-panel">
         <div className="claim-packet-panel__header">
           <div>
@@ -537,7 +527,7 @@ export default function ClaimPacketProcessingPage() {
 
           <div className="claim-packet-status">
             <span>Status</span>
-            <strong>{status}</strong>
+            <StatusBadge status={status} />
           </div>
         </div>
 
@@ -587,7 +577,7 @@ export default function ClaimPacketProcessingPage() {
                   <td>{totalPages}</td>
                   <td>{groupCount}</td>
                   <td>{reviewRequiredCount}</td>
-                  <td>{status}</td>
+                  <td><StatusBadge status={status} /></td>
                   <td>
                     <div className="claim-packet-table-actions">
                       <button

@@ -1,24 +1,106 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import './styles/claimbridge-ag-grid.css';
 
 :root {
-  --page-bg: #edf3fa;
-  --text-color: #334155;
-  --heading-color: #16233b;
-  --muted: #5d6f89;
-  --surface-border: rgba(127, 148, 176, 0.2);
-  --shadow-lg: 0 18px 42px rgba(14, 26, 45, 0.09);
-  --shadow-sm: 0 8px 22px rgba(20, 34, 54, 0.06);
-  --radius-xl: 26px;
-  --radius-lg: 18px;
-  font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  /* ---- Neutrals ---- */
+  --page-bg: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --text-color: #3a4454;
+  --heading-color: #101828;
+  --muted: #64748b;
+  --color-text-secondary: #475569;
+  --color-text-disabled: #98a2b3;
+  --surface-border: #e2e6ec;
+  --surface-border-subtle: #edf0f4;
+
+  /* ---- Primary (ClaimBridge blue) ---- */
+  --color-primary: #155eef;
+  --color-primary-hover: #1249c2;
+  --color-primary-active: #0e3a99;
+  --color-primary-subtle: #eaf1fe;
+
+  /* ---- Semantic status colors ---- */
+  --color-success: #0f9d58;
+  --color-success-bg: #e6f6ec;
+  --color-warning: #b54708;
+  --color-warning-bg: #fef3e6;
+  --color-error: #c01048;
+  --color-error-bg: #fbe7ee;
+  --color-info: #155eef;
+  --color-info-bg: #eaf1fe;
+  --color-pending: #6938d3;
+  --color-pending-bg: #f1ebfd;
+  --color-neutral: #475569;
+  --color-neutral-bg: #eef1f5;
+
+  /* ---- Chart palette (semantic-first, limited hues) ---- */
+  --chart-1: #155eef;
+  --chart-2: #0f9d58;
+  --chart-3: #b54708;
+  --chart-4: #6938d3;
+  --chart-5: #c01048;
+  --chart-6: #0891b2;
+  --chart-7: #475569;
+  --chart-8: #be185d;
+
+  /* ---- Spacing scale (4px base) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---- Radius scale ---- */
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-container: 12px;
+  --radius-pill: 999px;
+  /* Legacy aliases kept so existing rules keep working during migration. */
+  --radius-sm: var(--radius-control);
+  --radius-md: var(--radius-card);
+  --radius-lg: var(--radius-container);
+  --radius-xl: var(--radius-container);
+
+  /* ---- Elevation ---- */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-sm: 0 2px 8px rgba(16, 24, 40, 0.08);
+  --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.12);
+  --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.16);
+
+  /* ---- Motion ---- */
+  --motion-fast: 120ms ease;
+  --motion-base: 180ms ease;
+
+  /* Typography scale: a single source of truth so every screen shares the
+     same font family, weight, and size steps. */
+  --font-family-base: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 600;
+  --font-weight-heavy: 700;
+  --letter-tight: -0.01em;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.625rem;
+  --text-3xl: 1.75rem;
+  --text-hero: 1.75rem;
+
+  font-family: var(--font-family-base);
+  font-size: 16px;
   line-height: 1.5;
-  font-weight: 400;
+  font-weight: var(--font-weight-regular);
   color: var(--text-color);
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.14), transparent 26%),
-    radial-gradient(circle at 85% 12%, rgba(56, 189, 248, 0.12), transparent 20%),
-    linear-gradient(180deg, #f9fcff, #f1f6fc 45%, #eef3fa);
+  background: var(--page-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -36,32 +118,64 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.35), transparent 78%);
-  pointer-events: none;
+  font-family: inherit;
+  font-size: var(--text-base);
 }
 
 a {
   color: inherit;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: inherit;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-tight);
+  color: var(--heading-color);
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: var(--text-hero);
+}
+
+h2 {
+  font-size: var(--text-3xl);
+}
+
+h3 {
+  font-size: var(--text-lg);
+}
+
+h4 {
+  font-size: var(--text-md);
+}
+
+p {
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+
+small {
+  font-size: var(--text-sm);
+}
+
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
+  font-family: inherit;
 }
 
 #root {
   min-height: 100vh;
 }
+
 
 h1,
 h2,

@@ -7,7 +7,7 @@
 }
 
 .claimbridge-ag-grid {
-  --ag-font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --ag-font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --ag-font-size: 13px;
   --ag-border-radius: 14px;
   --ag-wrapper-border-radius: 14px;

@@ -1,0 +1,39 @@
+.page-header {
+  width: min(1480px, 100%);
+  margin: 0 auto var(--space-4);
+  padding: 0 var(--space-5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.page-header__eyebrow {
+  display: inline-flex;
+  color: var(--color-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-1);
+}
+
+.page-header__text h2 {
+  margin: 0 0 var(--space-1);
+  color: var(--heading-color);
+  font-size: var(--text-2xl);
+}
+
+.page-header__text p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}

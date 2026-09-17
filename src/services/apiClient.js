@@ -6,6 +6,19 @@ export const AUTH_USER_STORAGE_KEY = 'claimbridge-user-data'
 export const AUTH_TOKEN_STORAGE_KEY = 'claimbridge-auth-token'
 
 export const UNAUTHORIZED_EVENT = 'claimbridge:unauthorized'
+export const API_LOADING_EVENT = 'claimbridge:api-loading'
+let activeApiRequests = 0
+
+export function getActiveApiRequests() {
+  return activeApiRequests
+}
+
+function notifyApiLoading(delta) {
+  activeApiRequests = Math.max(0, activeApiRequests + delta)
+  if (typeof window === 'undefined') return
+
+  window.dispatchEvent(new CustomEvent(API_LOADING_EVENT, { detail: { delta, active: activeApiRequests } }))
+}
 
 export function getAuthToken() {
   try {
@@ -117,7 +130,18 @@ export async function apiFetch(endpointOrUrl, options = {}) {
     fetchOptions.credentials = 'include'
   }
 
-  const response = await fetch(fullUrl, fetchOptions)
+  if (!options.skipGlobalLoader) {
+    notifyApiLoading(1)
+  }
+
+  let response
+  try {
+    response = await fetch(fullUrl, fetchOptions)
+  } finally {
+    if (!options.skipGlobalLoader) {
+      notifyApiLoading(-1)
+    }
+  }
 
   if (response.status === 401 && !options.skipAuthEvent) {
     try {

@@ -1,0 +1,7 @@
+.dashboard-skeleton { display: grid; gap: var(--space-3); padding: var(--space-5); }
+.dashboard-skeleton__line { display: block; border-radius: var(--radius-control); background: var(--color-neutral-bg); }
+.dashboard-skeleton__line--title { width: 38%; height: var(--space-3); }
+.dashboard-skeleton__line--body { width: 100%; height: var(--space-10); }
+.dashboard-skeleton--kpi .dashboard-skeleton__line--body:last-child { width: 58%; }
+@media (prefers-reduced-motion: no-preference) { .dashboard-skeleton__line { animation: dashboard-skeleton-pulse 1.3s ease-in-out infinite alternate; } }
+@keyframes dashboard-skeleton-pulse { to { opacity: .55; } }

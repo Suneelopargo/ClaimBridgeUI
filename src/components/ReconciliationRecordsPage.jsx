@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { API_BASE_URL } from '../config/api'
 import { apiFetch } from '../services/apiClient'
 import LoadingOverlay from './LoadingOverlay'
+import { FilterBar, StatusBadge } from '../design-system'
 import './ReconciliationRecordsPage.css'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
@@ -441,6 +442,7 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
             cellEditorParams: {
               values: claimStatuses,
             },
+            cellRenderer: (params) => <StatusBadge status={params.value} />,
           }
         }
 
@@ -519,16 +521,14 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
         <div className="panel-heading reconciliation-heading">
           <div>
             <span className="eyebrow">Reconciliation Records</span>
-            <h2>Reconciliation API Grid</h2>
-            <p>Search, filter, paginate, and export records from the backend reconciliation endpoint.</p>
           </div>
-          <div className="reconciliation-heading-meta">
+          {/* <div className="reconciliation-heading-meta">
             <span className="status-pill">AG Grid client pagination</span>
             <span className="status-pill status-pill--soft">Last sync: {lastUpdatedLabel}</span>
-          </div>
+          </div> */}
         </div>
 
-        <div className="reconciliation-controls">
+        <FilterBar onClear={handleClearFilters} clearLabel="Clear Filters">
           <label>
             <span>Search</span>
             <input
@@ -589,11 +589,9 @@ export default function ReconciliationRecordsPage({ isActive = true, canSyncFrom
               ))}
             </select>
           </label>
+        </FilterBar>
 
-          <button type="button" className="secondary-button" onClick={handleClearFilters}>
-            Clear Filters
-          </button>
-
+        <div className="reconciliation-controls reconciliation-controls--secondary">
           {/* <button
             type="button"
             className="secondary-button"

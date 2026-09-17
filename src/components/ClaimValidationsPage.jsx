@@ -15,6 +15,7 @@ import {
   validateCustomerDispatchChecklist,
 } from '../services/claimPacketApi'
 import LoadingOverlay from './LoadingOverlay'
+import { PageHeader, StatusBadge } from '../design-system'
 import './ClaimPacketProcessingPage.css'
 import './ClaimValidationsPage.css'
 import 'ag-grid-community/styles/ag-grid.css'
@@ -43,18 +44,6 @@ function Metric({ label, value, onClick }) {
       <strong>{value}</strong>
     </article>
   )
-}
-
-function StatusBadge({ value }) {
-  const normalizedValue = String(value || '').toUpperCase()
-  const className =
-    normalizedValue === 'READY' || normalizedValue === 'AVAILABLE' || normalizedValue === 'PROCESSED'
-      ? 'claim-status-badge claim-status-badge--good'
-      : normalizedValue === 'MISSING' || normalizedValue === 'REVIEW_REQUIRED'
-        ? 'claim-status-badge claim-status-badge--warn'
-        : 'claim-status-badge claim-status-badge--neutral'
-
-  return <span className={className}>{value || '—'}</span>
 }
 
 function PdfFileLinkCell(params) {
@@ -971,17 +960,6 @@ export default function ClaimValidationsPage({ isActive = true }) {
         scope="viewport"
       />
 
-      <section className="claim-hero panel">
-        <div>
-          <span className="eyebrow">ClaimBridge Workflow</span>
-          <h2>Claim Validations</h2>
-          <p>
-            Upload a consolidated claim PDF, split and group the pages, then run checklist
-            validation on the generated claim packet.
-          </p>
-        </div>
-      </section>
-
       <section className="claim-panel panel">
         <div className="claim-panel__header">
           <div>
@@ -1053,7 +1031,7 @@ export default function ClaimValidationsPage({ isActive = true }) {
               </p>
             </div>
 
-            <StatusBadge value={packet.summary?.status} />
+            <StatusBadge status={packet.summary?.status} />
           </div>
 
           <div className="claim-metrics-grid">
@@ -1113,7 +1091,7 @@ export default function ClaimValidationsPage({ isActive = true }) {
                       )}
                     </td>
                     <td>
-                      <StatusBadge value={doc.status} />
+                      <StatusBadge status={doc.status} />
                     </td>
                   </tr>
                 ))}
@@ -1133,7 +1111,7 @@ export default function ClaimValidationsPage({ isActive = true }) {
             </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-                <StatusBadge value={validation.summary?.overallStatus} />
+                <StatusBadge status={validation.summary?.overallStatus} />
 
                 <div>
                   <button
@@ -1202,7 +1180,7 @@ export default function ClaimValidationsPage({ isActive = true }) {
                       <td>{row.checklistItem}</td>
                       <td>{row.required ? 'Yes' : 'No'}</td>
                       <td>
-                        <StatusBadge value={currentStatus} />
+                        <StatusBadge status={currentStatus} />
                       </td>
                       <td>{row.matchedFiles?.join(', ') || '—'}</td>
                       <td>{row.remarks || '—'}</td>
@@ -1455,7 +1433,7 @@ export default function ClaimValidationsPage({ isActive = true }) {
             <div className="claim-small-modal__body">
               <div className="claim-small-modal__status-row">
                 <span>Current Status:</span>
-                <StatusBadge value={checklistStatusOverrides[selectedChecklistItem.itemNo] || selectedChecklistItem.status} />
+                <StatusBadge status={checklistStatusOverrides[selectedChecklistItem.itemNo] || selectedChecklistItem.status} />
               </div>
 
               <div className="claim-small-modal__form">
@@ -1560,7 +1538,7 @@ export default function ClaimValidationsPage({ isActive = true }) {
             <div className="claim-small-modal__body">
               <div className="claim-small-modal__status-row">
                 <span>Current Status:</span>
-                <StatusBadge value={checklistStatusOverrides[selectedUploadItem.itemNo] || selectedUploadItem.status} />
+                <StatusBadge status={checklistStatusOverrides[selectedUploadItem.itemNo] || selectedUploadItem.status} />
               </div>
 
               <div className="claim-small-modal__form">
