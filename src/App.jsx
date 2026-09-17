@@ -1401,6 +1401,8 @@ function ActivityLogPage({ isActive = false, currentRole }) {
 }
 
 function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('dashboard')
   const lastLoggedTabRef = useRef('')
 
@@ -1448,12 +1450,24 @@ function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
   }, [activeTab, currentRole, username, visibleTabs])
 
   useEffect(() => {
+    const pathSegment = location.pathname.split('/').filter(Boolean).at(-1) || 'dashboard'
+    const requestedTab = WORKSPACE_TABS.some((tab) => tab.id === pathSegment)
+      ? pathSegment
+      : 'dashboard'
+
+    if (requestedTab !== activeTab) {
+      setActiveTab(requestedTab)
+    }
+  }, [activeTab, location.pathname])
+
+  useEffect(() => {
     const hasActiveTab = visibleTabs.some((tab) => tab.id === activeTab)
 
     if (!hasActiveTab) {
       setActiveTab('dashboard')
+      navigate('/dashboard', { replace: true })
     }
-  }, [activeTab, visibleTabs])
+  }, [activeTab, navigate, visibleTabs])
 
   const activeModule = useMemo(
     () => visibleTabs.find((tab) => tab.id === activeTab) ?? visibleTabs[0],
@@ -1485,6 +1499,7 @@ function WorkspacePage({ onLogout, isSuperuser, currentRole, username }) {
                   className={`module-nav-item ${isSelected ? 'module-nav-item--active' : ''}`}
                   onClick={(event) => {
                     setActiveTab(tab.id)
+                    navigate(tab.id === 'dashboard' ? '/dashboard' : `/dashboard/${tab.id}`)
                     event.currentTarget.scrollIntoView({
                       behavior: 'smooth',
                       block: 'nearest',
@@ -1833,7 +1848,7 @@ function App() {
             element={<LoginPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />}
           />
           <Route
-            path="/dashboard"
+            path="/dashboard/*"
             element={(
               <ProtectedRoute isAuthenticated={isAuthenticated} onUnauthorized={executeLogout}>
                 <WorkspacePage
